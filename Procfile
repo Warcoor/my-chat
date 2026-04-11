@@ -1,1 +1,1 @@
-web: gunicorn -k eventlet -w 1 wbs:app
+web: python wbs.py
