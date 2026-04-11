@@ -8,9 +8,14 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 DATABASE_URL = "postgresql://postgres:ARHmeHekAknZBGekTCctDKhqzENFdnZY@metro.proxy.rlwy.net:29944/railway"
-conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-cursor = conn.cursor()
-print(DATABASE_URL)
+conn = None
+cursor = None
+
+def init_db():
+    global conn, cursor
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+    cursor = conn.cursor()
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -32,4 +37,5 @@ def handle_message(msg):
 
 port = int(os.environ.get("PORT", 3000))
 if __name__ == "__main__":
+    init_db()
     socketio.run(app, host="0.0.0.0", port=port)
