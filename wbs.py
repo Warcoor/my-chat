@@ -1,41 +1,60 @@
-from flask import Flask, render_template
+from flask import Flask, render_template_string
 from flask_socketio import SocketIO, send
-import psycopg2
 import os
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# простой HTML прямо в коде (чтобы не зависеть от templates)
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Chat</title>
+</head>
+<body>
+    <h2>SocketIO Test</h2>
+    <input id="msg" placeholder="message">
+    <button onclick="sendMsg()">Send</button>
 
-DATABASE_URL = "postgresql://postgres:ARHmeHekAknZBGekTCctDKhqzENFdnZY@metro.proxy.rlwy.net:29944/railway"
-conn = None
-cursor = None
+    <ul id="chat"></ul>
 
-def init_db():
-    global conn, cursor
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
-    cursor = conn.cursor()
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+
+        socket.on("message", (msg) => {
+            const li = document.createElement("li");
+            li.innerText = msg;
+            document.getElementById("chat").appendChild(li);
+        });
+
+        function sendMsg() {
+            const msg = document.getElementById("msg").value;
+            socket.send(msg);
+        }
+    </script>
+</body>
+</html>
+"""
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template_string(HTML)
 
 
 @socketio.on("message")
 def handle_message(msg):
-    print("Получено:", msg)
-
-    # сохраняем в БД
-    cursor.execute(
-        "INSERT INTO Messages (TextMessage) VALUES (%s)",
-        (msg,)
-    )
-    conn.commit()
-
-    # отправляем всем
+    print("Received:", msg)
     send(msg, broadcast=True, include_self=False)
 
-port = int(os.environ.get("PORT"))
+
 if __name__ == "__main__":
-    init_db()
-    socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
+    port = int(os.environ.get("PORT"))
+
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        allow_unsafe_werkzeug=True
+    )
