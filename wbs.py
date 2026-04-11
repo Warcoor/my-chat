@@ -23,7 +23,7 @@ def handle_message(msg):
 
     # сохраняем в БД
     cursor.execute(
-        "INSERT INTO Messages (TextMessage) VALUES (?)",
+        "INSERT INTO Messages (TextMessage) VALUES (%s)",
         (msg,)
     )
     conn.commit()
