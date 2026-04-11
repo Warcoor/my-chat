@@ -3,6 +3,8 @@ from flask_socketio import SocketIO, send
 import psycopg2
 import os
 
+print("HELLO START")
+
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
