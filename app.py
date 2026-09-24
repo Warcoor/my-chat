@@ -76,6 +76,27 @@ def registration():
 
     return jsonify({"message": "Вы успешно зарегистрированы!"}), 201
 
+# Проверка пользователя перед созданием чата
+@app.route("/check_user", methods=["POST"])
+def check_user():
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+    target_login = data.get("target_login")
+
+    user_id = sessions.get(session_id)
+    if not user_id:
+        return jsonify({"error": "Неавторизован"}), 401
+
+    current_user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if current_user and current_user.get("login") == target_login:
+        return jsonify({"error": "Нельзя создать чат с самим собой!"}), 400
+
+    target = users_collection.find_one({"login": target_login})
+    if not target:
+        return jsonify({"error": "Пользователь не найден!"}), 404
+
+    return jsonify({"status": "ok", "login": target_login}), 200
+
 @app.route("/save", methods=["POST"])
 def save():
     data = request.get_json() or {}
@@ -102,13 +123,12 @@ def save():
 
     return jsonify({"message": "Сообщение отправлено!"}), 200
 
-# Эндпоинт получения диалога с конкретным пользователем
 @app.route("/get_messages", methods=["POST"])
 def get_messages():
     data = request.get_json() or {}
     session_id = data.get("session_id")
     last_id = data.get("last_id")
-    chat_with = data.get("address") # С кем ведем диалог
+    chat_with = data.get("address")
 
     user_id = sessions.get(session_id)
     if not user_id:
@@ -123,7 +143,6 @@ def get_messages():
 
     other_id = str(other_user['_id'])
 
-    # Ищем диалог в обе стороны (мои ему ИЛИ его мне)
     query = {
         "$or": [
             {"sender_id": user_id, "receiver_id": other_id},
