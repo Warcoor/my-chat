@@ -22,7 +22,7 @@
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 900px;
             background: #ffffff;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -37,21 +37,24 @@
             flex-direction: column;
             width: 100%;
             justify-content: center;
+            max-width: 400px;
+            margin: 0 auto;
         }
 
         .chat-app {
             display: flex;
             width: 100%;
             height: 100%;
+            position: relative;
         }
 
-        /* Список чатов слева */
         .sidebar {
-            width: 30%;
+            width: 320px;
             border-right: 1px solid #e5e5e5;
             display: flex;
             flex-direction: column;
             background-color: #f8f9fa;
+            flex-shrink: 0;
         }
 
         .sidebar-header {
@@ -65,7 +68,7 @@
         }
 
         .chat-item {
-            padding: 12px;
+            padding: 12px 15px;
             border-bottom: 1px solid #eee;
             cursor: pointer;
             font-weight: bold;
@@ -76,9 +79,44 @@
             color: #0084ff;
         }
 
-        /* Область сообщений справа */
+        /* Профиль пользователя внизу сайдбара */
+        .user-profile {
+            padding: 12px 15px;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: #ffffff;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: #0084ff;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .user-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .user-name {
+            font-weight: bold;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .chat-main {
-            width: 70%;
+            flex: 1;
             display: flex;
             flex-direction: column;
             background: #ffffff;
@@ -93,6 +131,17 @@
             background-color: #fafafa;
         }
 
+        .back-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #0084ff;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0;
+            margin-right: 10px;
+        }
+
         #messages-container {
             flex: 1;
             padding: 15px;
@@ -103,7 +152,6 @@
             gap: 10px;
         }
 
-        /* Стиль входящих/исходящих сообщений */
         .message-item {
             max-width: 70%;
             padding: 8px 12px;
@@ -112,7 +160,6 @@
             font-size: 14px;
         }
 
-        /* Мои сообщения (справа, темные) */
         .message-item.my {
             align-self: flex-end;
             background-color: #0084ff;
@@ -120,7 +167,6 @@
             border-bottom-right-radius: 2px;
         }
 
-        /* Чужие сообщения (слева, обычные) */
         .message-item.other {
             align-self: flex-start;
             background-color: #e4e6eb;
@@ -162,10 +208,23 @@
         button:hover { background-color: #006bce; }
         .btn-secondary { background-color: #42b72a; }
         .btn-secondary:hover { background-color: #369421; }
-        .btn-logout { background-color: #e4e6eb; color: #333; padding: 5px 10px; }
+        .btn-logout { background-color: #ff4d4f; color: white; padding: 5px 10px; font-size: 12px; }
 
         .hidden { display: none !important; }
         .error-msg { color: red; font-size: 13px; margin-bottom: 10px; text-align: center; }
+
+        /* Адаптивность под мобильные устройства */
+        @media (max-width: 768px) {
+            body { padding: 0; }
+            .container { height: 100vh; max-width: 100%; border-radius: 0; }
+            .sidebar { width: 100%; }
+            .chat-main { display: none; width: 100%; }
+            
+            /* Режим активного чата на мобильном */
+            .chat-app.mobile-chat-active .sidebar { display: none; }
+            .chat-app.mobile-chat-active .chat-main { display: flex; }
+            .back-btn { display: inline-block; }
+        }
     </style>
 </head>
 <body>
@@ -183,22 +242,31 @@
 
     <!-- Чат -->
     <div id="chat-section" class="chat-app hidden">
-        <!-- Боковая панель чатов -->
+        <!-- Боковая панель -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <input type="text" id="new-chat-user" placeholder="Логин собеседника">
                 <button onclick="startNewChat()" style="width: 100%; margin-top: 5px;">+ Открыть чат</button>
             </div>
-            <div id="chats-list" class="chats-list">
-                <!-- Чаты будут создаваться тут -->
+            
+            <div id="chats-list" class="chats-list"></div>
+
+            <div class="user-profile">
+                <div id="user-avatar" class="avatar">?</div>
+                <div class="user-info">
+                    <div id="user-login-display" class="user-name">Мой профиль</div>
+                </div>
+                <button class="btn-logout" onclick="logout()">Выйти</button>
             </div>
         </div>
 
         <!-- Окно переписки -->
         <div class="chat-main">
             <div class="chat-header">
-                <span id="current-chat-title">Выберите чат</span>
-                <button class="btn-logout" onclick="logout()">Выйти</button>
+                <div style="display: flex; align-items: center;">
+                    <button class="back-btn" onclick="closeMobileChat()">←</button>
+                    <span id="current-chat-title" style="font-weight: bold;">Выберите чат</span>
+                </div>
             </div>
 
             <div id="messages-container"></div>
