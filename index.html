@@ -22,141 +22,195 @@
 
         .container {
             width: 100%;
-            max-width: 450px;
+            max-width: 800px;
             background: #ffffff;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             display: flex;
-            flex-direction: column;
             height: 90vh;
         }
 
-        .auth-box, .chat-box {
+        .auth-box {
             padding: 20px;
             display: flex;
             flex-direction: column;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .chat-app {
+            display: flex;
+            width: 100%;
             height: 100%;
         }
 
-        .hidden {
-            display: none !important;
+        /* Список чатов слева */
+        .sidebar {
+            width: 30%;
+            border-right: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            background-color: #f8f9fa;
         }
 
-        h2 {
-            margin-bottom: 15px;
-            text-align: center;
-            color: #333;
+        .sidebar-header {
+            padding: 10px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .chats-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .chat-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .chat-item:hover, .chat-item.active {
+            background-color: #e7f1ff;
+            color: #0084ff;
+        }
+
+        /* Область сообщений справа */
+        .chat-main {
+            width: 70%;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+        }
+
+        .chat-header {
+            padding: 10px 15px;
+            border-bottom: 1px solid #e5e5e5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fafafa;
+        }
+
+        #messages-container {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #f4f6f8;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Стиль входящих/исходящих сообщений */
+        .message-item {
+            max-width: 70%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            word-break: break-word;
+            font-size: 14px;
+        }
+
+        /* Мои сообщения (справа, темные) */
+        .message-item.my {
+            align-self: flex-end;
+            background-color: #0084ff;
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+
+        /* Чужие сообщения (слева, обычные) */
+        .message-item.other {
+            align-self: flex-start;
+            background-color: #e4e6eb;
+            color: #050505;
+            border-bottom-left-radius: 2px;
+        }
+
+        .message-item strong {
+            display: block;
+            font-size: 11px;
+            margin-bottom: 3px;
+            opacity: 0.8;
+        }
+
+        .input-area {
+            padding: 10px;
+            display: flex;
+            gap: 5px;
+            border-top: 1px solid #e5e5e5;
         }
 
         input {
             width: 100%;
             padding: 10px;
-            margin-bottom: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             font-size: 14px;
         }
 
         button {
-            width: 100%;
-            padding: 10px;
+            padding: 10px 15px;
             background-color: #0084ff;
             color: white;
             border: none;
             border-radius: 4px;
-            font-size: 14px;
             cursor: pointer;
-            margin-bottom: 5px;
         }
 
-        button:hover {
-            background-color: #006bce;
-        }
+        button:hover { background-color: #006bce; }
+        .btn-secondary { background-color: #42b72a; }
+        .btn-secondary:hover { background-color: #369421; }
+        .btn-logout { background-color: #e4e6eb; color: #333; padding: 5px 10px; }
 
-        .btn-secondary {
-            background-color: #42b72a;
-        }
-
-        .btn-secondary:hover {
-            background-color: #369421;
-        }
-
-        .btn-logout {
-            background-color: #e4e6eb;
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .btn-logout:hover {
-            background-color: #d8dadf;
-        }
-
-        /* Чат контейнер */
-        #messages-container {
-            flex: 1;
-            border: 1px solid #e5e5e5;
-            border-radius: 4px;
-            padding: 10px;
-            overflow-y: auto;
-            background-color: #fafafa;
-            margin-bottom: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .message-item {
-            background: #ffffff;
-            padding: 8px 12px;
-            border-radius: 6px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            border-left: 3px solid #0084ff;
-            word-break: break-word;
-        }
-
-        .message-item strong {
-            color: #0084ff;
-            display: block;
-            margin-bottom: 2px;
-            font-size: 12px;
-        }
-
-        .error-msg {
-            color: red;
-            font-size: 13px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
+        .hidden { display: none !important; }
+        .error-msg { color: red; font-size: 13px; margin-bottom: 10px; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- Форма авторизации и регистрации -->
+    <!-- Авторизация -->
     <div id="auth-section" class="auth-box">
-        <h2>Вход в MyChat</h2>
+        <h2 style="text-align: center; margin-bottom: 15px;">Вход в MyChat</h2>
         <div id="auth-error" class="error-msg"></div>
-        <input type="text" id="auth-login" placeholder="Логин">
-        <input type="password" id="auth-pas" placeholder="Пароль">
-        <button onclick="login()">Войти</button>
+        <input type="text" id="auth-login" placeholder="Логин" style="margin-bottom: 10px;">
+        <input type="password" id="auth-pas" placeholder="Пароль" style="margin-bottom: 10px;">
+        <button onclick="login()" style="margin-bottom: 5px;">Войти</button>
         <button class="btn-secondary" onclick="register()">Зарегистрироваться</button>
     </div>
 
-    <!-- Интерфейс чата -->
-    <div id="chat-section" class="chat-box hidden">
-        <button class="btn-logout" onclick="logout()">Выйти из аккаунта</button>
-
-        <div id="messages-container">
-            <!-- Сообщения будут появляться здесь -->
+    <!-- Чат -->
+    <div id="chat-section" class="chat-app hidden">
+        <!-- Боковая панель чатов -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <input type="text" id="new-chat-user" placeholder="Логин собеседника">
+                <button onclick="startNewChat()" style="width: 100%; margin-top: 5px;">+ Открыть чат</button>
+            </div>
+            <div id="chats-list" class="chats-list">
+                <!-- Чаты будут создаваться тут -->
+            </div>
         </div>
 
-        <input type="text" id="receiver-login" placeholder="Логин получателя">
-        <input type="text" id="message-text" placeholder="Введите сообщение...">
-        <button onclick="sendMessage()">Отправить</button>
+        <!-- Окно переписки -->
+        <div class="chat-main">
+            <div class="chat-header">
+                <span id="current-chat-title">Выберите чат</span>
+                <button class="btn-logout" onclick="logout()">Выйти</button>
+            </div>
+
+            <div id="messages-container"></div>
+
+            <div class="input-area">
+                <input type="text" id="message-text" placeholder="Введите сообщение...">
+                <button onclick="sendMessage()">Отправить</button>
+            </div>
+        </div>
     </div>
 </div>
 
-<script src="script.js"></script>
+<script src="./script.js"></script>
 </body>
 </html>
