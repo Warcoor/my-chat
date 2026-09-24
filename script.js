@@ -70,14 +70,51 @@ function showChat() {
     document.getElementById("auth-section").classList.add("hidden");
     document.getElementById("chat-section").classList.remove("hidden");
     
-    // Обновляем аватарку и имя пользователя
     if (myLogin) {
         document.getElementById("user-login-display").innerText = myLogin;
         document.getElementById("user-avatar").innerText = myLogin.charAt(0).toUpperCase();
     }
 
+    loadUserChats();
+
     if (!pollInterval) {
-        pollInterval = setInterval(fetchMessages, 3000);
+        pollInterval = setInterval(() => {
+            fetchMessages();
+            loadUserChats();
+        }, 3000);
+    }
+}
+
+async function loadUserChats() {
+    const sessionId = localStorage.getItem("session_id");
+    if (!sessionId) return;
+
+    try {
+        const res = await fetch(`${API_URL}/get_chats`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.chats) {
+                let hasNewChat = false;
+
+                data.chats.forEach(chatUser => {
+                    if (!activeChats.has(chatUser)) {
+                        activeChats.add(chatUser);
+                        hasNewChat = true;
+                    }
+                });
+
+                if (hasNewChat) {
+                    renderChatsList();
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Ошибка обновления списка чатов:", err);
     }
 }
 
@@ -88,6 +125,7 @@ function logout() {
     pollInterval = null;
     currentChatUser = null;
     activeChats.clear();
+    document.getElementById("chats-list").innerHTML = "";
     document.getElementById("chat-section").classList.add("hidden");
     document.getElementById("auth-section").classList.remove("hidden");
 }
@@ -143,7 +181,6 @@ function openChat(username) {
     document.getElementById("current-chat-title").innerText = `Чат с: ${username}`;
     document.getElementById("messages-container").innerHTML = "";
     
-    // Включаем мобильный режим отображения чата
     document.getElementById("chat-section").classList.add("mobile-chat-active");
 
     renderChatsList();
