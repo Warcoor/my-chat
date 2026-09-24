@@ -1,7 +1,7 @@
 function Login(){
     const login = document.getElementById("login").value;
     const pass = document.getElementById("password").value;
-    fetch("http://localhost:3000/login", { method: "POST",
+    fetch("https://mychat-backend-gnp6.onrender.com/login", { method: "POST",
     headers: {
     "Content-type":  "application/json"
     },
@@ -22,7 +22,7 @@ function Login(){
 function Register(){
     const login = document.getElementById("login").value;
     const pass = document.getElementById("password").value;
-    fetch("http://localhost:3000/register", {method: "POST",
+    fetch("https://mychat-backend-gnp6.onrender.com/register", {method: "POST",
     headers: {
     "Content-type": "application/json"
     },
@@ -40,7 +40,7 @@ function sendData(){
             const adress = document.getElementById("Who").value;
             console.log(session_id)
             if(adress !== ""){
-                fetch("http://localhost:3000/save", {
+                fetch("https://mychat-backend-gnp6.onrender.com/save", {
                     method: "Post",
                     headers: {
                         "Content-type": "application/json"
@@ -58,7 +58,7 @@ function sendData(){
         }
 function getData(){
             const session_id = localStorage.getItem("session_id");
-            fetch("http://localhost:3000/getlm", {
+            fetch("https://mychat-backend-gnp6.onrender.com/getlm", {
             method: "POST",
             headers: {
                 "Content-type": "application/json"
@@ -74,7 +74,7 @@ function getData(){
         });
         }
 function erase(){
-            fetch("http://localhost:3000/erase")
+            fetch("https://mychat-backend-gnp6.onrender.com/erase")
             const dl = document.getElementById("dl");
             dl.showModal();
         }
