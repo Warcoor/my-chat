@@ -1,5 +1,5 @@
 // Замените на URL вашего сервера Render
-const API_URL = "https://mychat-backend.onrender.com";
+const API_URL = "https://mychat-backend-gnp6.onrender.com";
 
 let lastSeenId = null;
 let pollInterval = null;
