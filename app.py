@@ -129,6 +129,32 @@ def get_chats():
 
     return jsonify({"chats": chats}), 200
 
+@app.route("/delete_chat", methods=["POST"])
+def delete_chat():
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+    target_login = data.get("target_login")
+
+    user_id = sessions.get(session_id)
+    if not user_id:
+        return jsonify({"error": "Неавторизован"}), 401
+
+    target = users_collection.find_one({"login": target_login})
+    if not target:
+        return jsonify({"error": "Пользователь не найден"}), 404
+
+    target_id = str(target['_id'])
+
+    # Физически удаляем все сообщения из базы данных Mongo
+    messages_collection.delete_many({
+        "$or": [
+            {"sender_id": user_id, "receiver_id": target_id},
+            {"sender_id": target_id, "receiver_id": user_id}
+        ]
+    })
+
+    return jsonify({"message": "Чат успешно удален"}), 200
+
 @app.route("/save", methods=["POST"])
 def save():
     data = request.get_json() or {}
