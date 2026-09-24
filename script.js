@@ -1,10 +1,10 @@
-// Замените на URL вашего сервера Render
-const API_URL = "https://mychat-backend-gnp6.onrender.com";
+const API_URL = "https://mychat-backend-gnp6.onrender.com"; 
 
 let lastSeenId = null;
 let pollInterval = null;
+let currentChatUser = null;
+let activeChats = new Set(); // Храним список открытых чатов
 
-// Проверяем авторизацию при загрузке страницы
 window.onload = () => {
     const sessionId = localStorage.getItem("session_id");
     if (sessionId) {
@@ -66,32 +66,67 @@ async function register() {
 function showChat() {
     document.getElementById("auth-section").classList.add("hidden");
     document.getElementById("chat-section").classList.remove("hidden");
-
-    // Сбрасываем ID и очищаем чат
-    lastSeenId = null;
-    document.getElementById("messages-container").innerHTML = "";
-
-    // Сразу получаем историю и запускаем таймер на проверку новых сообщений
-    fetchMessages();
-    pollInterval = setInterval(fetchMessages, 3000);
+    
+    // Запускаем автоматический забор сообщений раз в 3 секунды
+    if (!pollInterval) {
+        pollInterval = setInterval(fetchMessages, 3000);
+    }
 }
 
 function logout() {
     localStorage.removeItem("session_id");
     clearInterval(pollInterval);
+    pollInterval = null;
     document.getElementById("chat-section").classList.add("hidden");
     document.getElementById("auth-section").classList.remove("hidden");
 }
 
+// Создание нового чата через ввод юзера
+function startNewChat() {
+    const userInput = document.getElementById("new-chat-user");
+    const targetUser = userInput.value.trim();
+
+    if (!targetUser) return;
+
+    activeChats.add(targetUser);
+    renderChatsList();
+    openChat(targetUser);
+    userInput.value = "";
+}
+
+function renderChatsList() {
+    const container = document.getElementById("chats-list");
+    container.innerHTML = "";
+
+    activeChats.forEach(user => {
+        const div = document.createElement("div");
+        div.className = `chat-item ${user === currentChatUser ? 'active' : ''}`;
+        div.innerText = user;
+        div.onclick = () => openChat(user);
+        container.appendChild(div);
+    });
+}
+
+function openChat(username) {
+    currentChatUser = username;
+    lastSeenId = null; // Сбрасываем ID, чтобы загрузить всю переписку заново
+    document.getElementById("current-chat-title").innerText = `Чат с: ${username}`;
+    document.getElementById("messages-container").innerHTML = "";
+    
+    renderChatsList();
+    fetchMessages();
+}
+
 async function sendMessage() {
     const sessionId = localStorage.getItem("session_id");
-    const address = document.getElementById("receiver-login").value;
     const text = document.getElementById("message-text").value;
 
-    if (!text || !address) {
-        alert("Заполните логин получателя и текст сообщения!");
+    if (!currentChatUser) {
+        alert("Выберите чат слева или создайте новый!");
         return;
     }
+
+    if (!text) return;
 
     try {
         const res = await fetch(`${API_URL}/save`, {
@@ -99,17 +134,16 @@ async function sendMessage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 session_id: sessionId,
-                address: address,
+                address: currentChatUser,
                 text: text
             })
         });
 
-        const data = await res.json();
         if (res.ok) {
             document.getElementById("message-text").value = "";
-            // Сразу запрашиваем обновленные сообщения
             fetchMessages();
         } else {
+            const data = await res.json();
             alert(data.error || "Ошибка отправки");
         }
     } catch (err) {
@@ -119,7 +153,7 @@ async function sendMessage() {
 
 async function fetchMessages() {
     const sessionId = localStorage.getItem("session_id");
-    if (!sessionId) return;
+    if (!sessionId || !currentChatUser) return;
 
     try {
         const res = await fetch(`${API_URL}/get_messages`, {
@@ -127,12 +161,12 @@ async function fetchMessages() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 session_id: sessionId,
+                address: currentChatUser,
                 last_id: lastSeenId
             })
         });
 
         if (res.status === 401) {
-            // Если сессия истекла или недействительна
             logout();
             return;
         }
@@ -144,15 +178,15 @@ async function fetchMessages() {
 
             data.messages.forEach(msg => {
                 const msgDiv = document.createElement("div");
-                msgDiv.className = "message-item";
-                msgDiv.innerHTML = `<strong>От: ${msg.sender}</strong>${msg.text}`;
+                
+                // Мои сообщения - темные справа, чужие - светлые слева
+                msgDiv.className = `message-item ${msg.is_my ? 'my' : 'other'}`;
+                msgDiv.innerHTML = `<strong>${msg.sender}</strong>${msg.text}`;
+                
                 container.appendChild(msgDiv);
-
-                // Фиксируем ID последнего отображенного сообщения
                 lastSeenId = msg.id;
             });
 
-            // Автоматически скроллим контейнер вниз при появлении новых сообщений
             container.scrollTop = container.scrollHeight;
         }
     } catch (err) {
