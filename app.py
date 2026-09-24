@@ -1,16 +1,23 @@
 import os
 import uuid
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+CORS(app)
 
-# Полностью разрешаем CORS для всех запросов
-CORS(app, resources={r"/*": {"origins": "*"}})
+# ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК OPTIONS (закрывает проблему с CORS раз и навсегда)
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        return response, 200
 
-# Подключение через переменную окружения
 MONGO_URI = os.environ.get("MONGO_URI", "your_fallback_mongo_uri_here")
 client = MongoClient(MONGO_URI)
 
@@ -18,19 +25,14 @@ db = client['chat_db']
 users_collection = db['users']
 messages_collection = db['messages']
 
-# Хранилище сессий
 sessions = {}
 
 @app.route('/')
 def home():
     return jsonify({"status": "ok", "message": "Backend is running"})
 
-@app.route("/login", methods=["POST", "OPTIONS"])
+@app.route("/login", methods=["POST"])
 def checklogin():
-    # Отвечаем браузеру на проверку CORS
-    if request.method == "OPTIONS":
-        return "", 200
-
     data = request.get_json() or {}
     login = data.get('log')
     password = data.get('pas')
@@ -52,12 +54,8 @@ def checklogin():
 
     return jsonify({"error": "Неверный логин или пароль!"}), 401
 
-@app.route("/register", methods=["POST", "OPTIONS"])
+@app.route("/register", methods=["POST"])
 def registration():
-    # Отвечаем браузеру на проверку CORS
-    if request.method == "OPTIONS":
-        return "", 200
-
     data = request.get_json() or {}
     login = data.get('log')
     password = data.get('pas')
@@ -76,12 +74,8 @@ def registration():
 
     return jsonify({"message": "Вы успешно зарегистрированы!"}), 201
 
-@app.route("/save", methods=["POST", "OPTIONS"])
+@app.route("/save", methods=["POST"])
 def save():
-    # Отвечаем браузеру на проверку CORS
-    if request.method == "OPTIONS":
-        return "", 200
-
     data = request.get_json() or {}
     text = data.get('text')
     session_id = data.get('session_id')
@@ -106,12 +100,8 @@ def save():
 
     return jsonify({"message": "Сообщение отправлено!"}), 200
 
-@app.route("/getlm", methods=["POST", "OPTIONS"])
+@app.route("/getlm", methods=["POST"])
 def getlm():
-    # Отвечаем браузеру на проверку CORS
-    if request.method == "OPTIONS":
-        return "", 200
-
     data = request.get_json() or {}
     session_id = data.get("session_id")
 
