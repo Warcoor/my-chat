@@ -6,7 +6,9 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# Полностью разрешаем CORS для всех запросов
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Подключение через переменную окружения
 MONGO_URI = os.environ.get("MONGO_URI", "your_fallback_mongo_uri_here")
@@ -16,7 +18,7 @@ db = client['chat_db']
 users_collection = db['users']
 messages_collection = db['messages']
 
-# Хранилище сессий (Для продакшена лучше использовать JWT или хранить сессии в MongoDB)
+# Хранилище сессий
 sessions = {}
 
 @app.route('/')
@@ -25,6 +27,10 @@ def home():
 
 @app.route("/login", methods=["POST", "OPTIONS"])
 def checklogin():
+    # Отвечаем браузеру на проверку CORS
+    if request.method == "OPTIONS":
+        return "", 200
+
     data = request.get_json() or {}
     login = data.get('log')
     password = data.get('pas')
@@ -48,6 +54,10 @@ def checklogin():
 
 @app.route("/register", methods=["POST", "OPTIONS"])
 def registration():
+    # Отвечаем браузеру на проверку CORS
+    if request.method == "OPTIONS":
+        return "", 200
+
     data = request.get_json() or {}
     login = data.get('log')
     password = data.get('pas')
@@ -58,7 +68,6 @@ def registration():
     if users_collection.find_one({"login": login}):
         return jsonify({"error": "Данный логин уже занят!"}), 400
 
-    # Хешируем пароль перед сохранением
     hashed_password = generate_password_hash(password)
     users_collection.insert_one({
         "login": login,
@@ -69,6 +78,10 @@ def registration():
 
 @app.route("/save", methods=["POST", "OPTIONS"])
 def save():
+    # Отвечаем браузеру на проверку CORS
+    if request.method == "OPTIONS":
+        return "", 200
+
     data = request.get_json() or {}
     text = data.get('text')
     session_id = data.get('session_id')
@@ -95,6 +108,10 @@ def save():
 
 @app.route("/getlm", methods=["POST", "OPTIONS"])
 def getlm():
+    # Отвечаем браузеру на проверку CORS
+    if request.method == "OPTIONS":
+        return "", 200
+
     data = request.get_json() or {}
     session_id = data.get("session_id")
 
