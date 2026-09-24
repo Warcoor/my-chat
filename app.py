@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
 CORS(app)
@@ -102,22 +103,46 @@ def save():
 
     return jsonify({"message": "Сообщение отправлено!"}), 200
 
-@app.route("/getlm", methods=["POST"])
-def getlm():
+# Эндпоинт получения списка сообщений (всех или только новых)
+@app.route("/get_messages", methods=["POST"])
+def get_messages():
     data = request.get_json() or {}
     session_id = data.get("session_id")
+    last_id = data.get("last_id")
 
     user_id = sessions.get(session_id)
     if not user_id:
         return jsonify({"error": "Неавторизован"}), 401
 
-    last_message = messages_collection.find_one(
-        {"receiver_id": user_id},
-        sort=[('_id', -1)]
-    )
+    query = {"receiver_id": user_id}
 
-    lastm = last_message["text"] if last_message else "Нет сообщений"
-    return jsonify({"backm": lastm}), 200
+    # Если передан last_id, запрашиваем только более свежие записи
+    if last_id:
+        try:
+            query["_id"] = {"$gt": ObjectId(last_id)}
+        except Exception:
+            pass
+
+    new_messages = messages_collection.find(query).sort('_id', 1)
+
+    message_list = []
+    for msg in new_messages:
+        # Поиск логина отправителя по его _id
+        sender_id_val = msg["sender_id"]
+        if isinstance(sender_id_val, str) and len(sender_id_val) == 24:
+            sender = users_collection.find_one({"_id": ObjectId(sender_id_val)})
+        else:
+            sender = users_collection.find_one({"_id": sender_id_val})
+
+        sender_login = sender["login"] if sender else "Неизвестный"
+
+        message_list.append({
+            "id": str(msg["_id"]),
+            "sender": sender_login,
+            "text": msg["text"]
+        })
+
+    return jsonify({"messages": message_list}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
