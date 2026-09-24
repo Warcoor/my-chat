@@ -72,6 +72,9 @@
             border-bottom: 1px solid #eee;
             cursor: pointer;
             font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .chat-item:hover, .chat-item.active {
@@ -79,7 +82,21 @@
             color: #0084ff;
         }
 
-        /* Профиль пользователя внизу сайдбара */
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .delete-btn:hover {
+            color: #ff4d4f;
+            background-color: #ffe6e6;
+        }
+
         .user-profile {
             padding: 12px 15px;
             border-top: 1px solid #e5e5e5;
@@ -213,14 +230,12 @@
         .hidden { display: none !important; }
         .error-msg { color: red; font-size: 13px; margin-bottom: 10px; text-align: center; }
 
-        /* Адаптивность под мобильные устройства */
         @media (max-width: 768px) {
             body { padding: 0; }
             .container { height: 100vh; max-width: 100%; border-radius: 0; }
             .sidebar { width: 100%; }
             .chat-main { display: none; width: 100%; }
             
-            /* Режим активного чата на мобильном */
             .chat-app.mobile-chat-active .sidebar { display: none; }
             .chat-app.mobile-chat-active .chat-main { display: flex; }
             .back-btn { display: inline-block; }
@@ -230,7 +245,6 @@
 <body>
 
 <div class="container">
-    <!-- Авторизация -->
     <div id="auth-section" class="auth-box">
         <h2 style="text-align: center; margin-bottom: 15px;">Вход в MyChat</h2>
         <div id="auth-error" class="error-msg"></div>
@@ -240,9 +254,7 @@
         <button class="btn-secondary" onclick="register()">Зарегистрироваться</button>
     </div>
 
-    <!-- Чат -->
     <div id="chat-section" class="chat-app hidden">
-        <!-- Боковая панель -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <input type="text" id="new-chat-user" placeholder="Логин собеседника">
@@ -260,7 +272,6 @@
             </div>
         </div>
 
-        <!-- Окно переписки -->
         <div class="chat-main">
             <div class="chat-header">
                 <div style="display: flex; align-items: center;">
