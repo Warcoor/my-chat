@@ -5,12 +5,34 @@ let pollInterval = null;
 let currentChatUser = null;
 let activeChats = new Set();
 let myLogin = localStorage.getItem("my_login") || "";
-let isFetching = false; // Флаг от дублирования сообщений при частых кликах
+let isFetching = false;
 
-window.onload = () => {
+// Проверка валидности сессии при загрузке страницы
+window.onload = async () => {
     const sessionId = localStorage.getItem("session_id");
+
     if (sessionId) {
-        showChat();
+        try {
+            const res = await fetch(`${API_URL}/verify_session`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: sessionId })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                myLogin = data.my_login;
+                localStorage.setItem("my_login", myLogin);
+                showChat();
+            } else {
+                logout();
+            }
+        } catch (err) {
+            console.error("Ошибка проверки сессии:", err);
+            document.getElementById("auth-section").classList.remove("hidden");
+        }
+    } else {
+        document.getElementById("auth-section").classList.remove("hidden");
     }
 };
 
@@ -70,7 +92,7 @@ async function register() {
 function showChat() {
     document.getElementById("auth-section").classList.add("hidden");
     document.getElementById("chat-section").classList.remove("hidden");
-    
+
     if (myLogin) {
         document.getElementById("user-login-display").innerText = myLogin;
         document.getElementById("user-avatar").innerText = myLogin.charAt(0).toUpperCase();
@@ -101,8 +123,7 @@ async function loadUserChats() {
             const data = await res.json();
             if (data.chats) {
                 let hasChanges = false;
-                
-                // Проверяем, появились ли новые
+
                 data.chats.forEach(chatUser => {
                     if (!activeChats.has(chatUser)) {
                         activeChats.add(chatUser);
@@ -171,7 +192,7 @@ function renderChatsList() {
     activeChats.forEach(user => {
         const div = document.createElement("div");
         div.className = `chat-item ${user === currentChatUser ? 'active' : ''}`;
-        
+
         const titleSpan = document.createElement("span");
         titleSpan.innerText = user;
         titleSpan.onclick = () => openChat(user);
@@ -181,7 +202,7 @@ function renderChatsList() {
         delBtn.innerHTML = "✕";
         delBtn.title = "Удалить чат";
         delBtn.onclick = (e) => {
-            e.stopPropagation(); // Не открываем чат при нажатии на крестик
+            e.stopPropagation();
             deleteChat(user);
         };
 
@@ -224,15 +245,15 @@ async function deleteChat(username) {
 }
 
 function openChat(username) {
-    if (currentChatUser === username) return; // Если уже в этом чате, ничего не делаем
+    if (currentChatUser === username) return;
 
     currentChatUser = username;
     lastSeenId = null;
     isFetching = false;
-    
+
     document.getElementById("current-chat-title").innerText = `Чат с: ${username}`;
-    document.getElementById("messages-container").innerHTML = ""; // Очищаем контейнер при смене
-    
+    document.getElementById("messages-container").innerHTML = "";
+
     document.getElementById("chat-section").classList.add("mobile-chat-active");
 
     renderChatsList();
@@ -305,13 +326,12 @@ async function fetchMessages() {
             const container = document.getElementById("messages-container");
 
             data.messages.forEach(msg => {
-                // Защита от дублей прямо перед добавлением в DOM
                 if (!document.getElementById(`msg-${msg.id}`)) {
                     const msgDiv = document.createElement("div");
                     msgDiv.id = `msg-${msg.id}`;
                     msgDiv.className = `message-item ${msg.is_my ? 'my' : 'other'}`;
                     msgDiv.innerHTML = `<strong>${msg.sender}</strong>${msg.text}`;
-                    
+
                     container.appendChild(msgDiv);
                     lastSeenId = msg.id;
                 }
