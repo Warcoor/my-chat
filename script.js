@@ -5,6 +5,7 @@ let pollInterval = null;
 let currentChatUser = null;
 let activeChats = new Set();
 let myLogin = localStorage.getItem("my_login") || "";
+let isFetching = false; // Флаг от дублирования сообщений при частых кликах
 
 window.onload = () => {
     const sessionId = localStorage.getItem("session_id");
@@ -99,16 +100,17 @@ async function loadUserChats() {
         if (res.ok) {
             const data = await res.json();
             if (data.chats) {
-                let hasNewChat = false;
-
+                let hasChanges = false;
+                
+                // Проверяем, появились ли новые
                 data.chats.forEach(chatUser => {
                     if (!activeChats.has(chatUser)) {
                         activeChats.add(chatUser);
-                        hasNewChat = true;
+                        hasChanges = true;
                     }
                 });
 
-                if (hasNewChat) {
+                if (hasChanges) {
                     renderChatsList();
                 }
             }
@@ -169,17 +171,67 @@ function renderChatsList() {
     activeChats.forEach(user => {
         const div = document.createElement("div");
         div.className = `chat-item ${user === currentChatUser ? 'active' : ''}`;
-        div.innerText = user;
-        div.onclick = () => openChat(user);
+        
+        const titleSpan = document.createElement("span");
+        titleSpan.innerText = user;
+        titleSpan.onclick = () => openChat(user);
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "delete-btn";
+        delBtn.innerHTML = "✕";
+        delBtn.title = "Удалить чат";
+        delBtn.onclick = (e) => {
+            e.stopPropagation(); // Не открываем чат при нажатии на крестик
+            deleteChat(user);
+        };
+
+        div.appendChild(titleSpan);
+        div.appendChild(delBtn);
         container.appendChild(div);
     });
 }
 
+async function deleteChat(username) {
+    if (!confirm(`Удалить переписку с ${username}? Сообщения удалятся навсегда.`)) return;
+
+    const sessionId = localStorage.getItem("session_id");
+
+    try {
+        const res = await fetch(`${API_URL}/delete_chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                session_id: sessionId,
+                target_login: username
+            })
+        });
+
+        if (res.ok) {
+            activeChats.delete(username);
+            if (currentChatUser === username) {
+                currentChatUser = null;
+                document.getElementById("current-chat-title").innerText = "Выберите чат";
+                document.getElementById("messages-container").innerHTML = "";
+            }
+            renderChatsList();
+        } else {
+            const data = await res.json();
+            alert(data.error || "Ошибка при удалении");
+        }
+    } catch (err) {
+        alert("Ошибка сети при удалении чата");
+    }
+}
+
 function openChat(username) {
+    if (currentChatUser === username) return; // Если уже в этом чате, ничего не делаем
+
     currentChatUser = username;
     lastSeenId = null;
+    isFetching = false;
+    
     document.getElementById("current-chat-title").innerText = `Чат с: ${username}`;
-    document.getElementById("messages-container").innerHTML = "";
+    document.getElementById("messages-container").innerHTML = ""; // Очищаем контейнер при смене
     
     document.getElementById("chat-section").classList.add("mobile-chat-active");
 
@@ -227,7 +279,9 @@ async function sendMessage() {
 
 async function fetchMessages() {
     const sessionId = localStorage.getItem("session_id");
-    if (!sessionId || !currentChatUser) return;
+    if (!sessionId || !currentChatUser || isFetching) return;
+
+    isFetching = true;
 
     try {
         const res = await fetch(`${API_URL}/get_messages`, {
@@ -251,17 +305,23 @@ async function fetchMessages() {
             const container = document.getElementById("messages-container");
 
             data.messages.forEach(msg => {
-                const msgDiv = document.createElement("div");
-                msgDiv.className = `message-item ${msg.is_my ? 'my' : 'other'}`;
-                msgDiv.innerHTML = `<strong>${msg.sender}</strong>${msg.text}`;
-                
-                container.appendChild(msgDiv);
-                lastSeenId = msg.id;
+                // Защита от дублей прямо перед добавлением в DOM
+                if (!document.getElementById(`msg-${msg.id}`)) {
+                    const msgDiv = document.createElement("div");
+                    msgDiv.id = `msg-${msg.id}`;
+                    msgDiv.className = `message-item ${msg.is_my ? 'my' : 'other'}`;
+                    msgDiv.innerHTML = `<strong>${msg.sender}</strong>${msg.text}`;
+                    
+                    container.appendChild(msgDiv);
+                    lastSeenId = msg.id;
+                }
             });
 
             container.scrollTop = container.scrollHeight;
         }
     } catch (err) {
         console.error("Ошибка при получении сообщений:", err);
+    } finally {
+        isFetching = false;
     }
 }
