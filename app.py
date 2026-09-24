@@ -32,6 +32,21 @@ sessions = {}
 def home():
     return jsonify({"status": "ok", "message": "Backend is running"})
 
+@app.route("/verify_session", methods=["POST"])
+def verify_session():
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+
+    user_id = sessions.get(session_id)
+    if not user_id:
+        return jsonify({"valid": False, "error": "Сессия недействительна"}), 401
+
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        return jsonify({"valid": False, "error": "Пользователь не найден"}), 404
+
+    return jsonify({"valid": True, "my_login": user.get("login")}), 200
+
 @app.route("/login", methods=["POST"])
 def checklogin():
     data = request.get_json() or {}
@@ -145,7 +160,7 @@ def delete_chat():
 
     target_id = str(target['_id'])
 
-    # Физически удаляем все сообщения из базы данных Mongo
+    # Полностью удаляем все сообщения из базы Mongo
     messages_collection.delete_many({
         "$or": [
             {"sender_id": user_id, "receiver_id": target_id},
