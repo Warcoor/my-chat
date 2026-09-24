@@ -3,7 +3,8 @@ const API_URL = "https://mychat-backend-gnp6.onrender.com";
 let lastSeenId = null;
 let pollInterval = null;
 let currentChatUser = null;
-let activeChats = new Set(); // Храним список открытых чатов
+let activeChats = new Set();
+let myLogin = localStorage.getItem("my_login") || "";
 
 window.onload = () => {
     const sessionId = localStorage.getItem("session_id");
@@ -31,6 +32,8 @@ async function login() {
         const data = await res.json();
         if (res.ok) {
             localStorage.setItem("session_id", data.session_id);
+            myLogin = data.my_login || log;
+            localStorage.setItem("my_login", myLogin);
             showChat();
         } else {
             showError(data.error || "Ошибка входа");
@@ -67,7 +70,12 @@ function showChat() {
     document.getElementById("auth-section").classList.add("hidden");
     document.getElementById("chat-section").classList.remove("hidden");
     
-    // Запускаем автоматический забор сообщений раз в 3 секунды
+    // Обновляем аватарку и имя пользователя
+    if (myLogin) {
+        document.getElementById("user-login-display").innerText = myLogin;
+        document.getElementById("user-avatar").innerText = myLogin.charAt(0).toUpperCase();
+    }
+
     if (!pollInterval) {
         pollInterval = setInterval(fetchMessages, 3000);
     }
@@ -75,23 +83,45 @@ function showChat() {
 
 function logout() {
     localStorage.removeItem("session_id");
+    localStorage.removeItem("my_login");
     clearInterval(pollInterval);
     pollInterval = null;
+    currentChatUser = null;
+    activeChats.clear();
     document.getElementById("chat-section").classList.add("hidden");
     document.getElementById("auth-section").classList.remove("hidden");
 }
 
-// Создание нового чата через ввод юзера
-function startNewChat() {
+async function startNewChat() {
     const userInput = document.getElementById("new-chat-user");
     const targetUser = userInput.value.trim();
+    const sessionId = localStorage.getItem("session_id");
 
     if (!targetUser) return;
 
-    activeChats.add(targetUser);
-    renderChatsList();
-    openChat(targetUser);
-    userInput.value = "";
+    try {
+        const res = await fetch(`${API_URL}/check_user`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                session_id: sessionId,
+                target_login: targetUser
+            })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            activeChats.add(targetUser);
+            renderChatsList();
+            openChat(targetUser);
+            userInput.value = "";
+        } else {
+            alert(data.error || "Ошибка при поиске пользователя");
+        }
+    } catch (err) {
+        alert("Ошибка сети при проверке пользователя");
+    }
 }
 
 function renderChatsList() {
@@ -109,12 +139,19 @@ function renderChatsList() {
 
 function openChat(username) {
     currentChatUser = username;
-    lastSeenId = null; // Сбрасываем ID, чтобы загрузить всю переписку заново
+    lastSeenId = null;
     document.getElementById("current-chat-title").innerText = `Чат с: ${username}`;
     document.getElementById("messages-container").innerHTML = "";
     
+    // Включаем мобильный режим отображения чата
+    document.getElementById("chat-section").classList.add("mobile-chat-active");
+
     renderChatsList();
     fetchMessages();
+}
+
+function closeMobileChat() {
+    document.getElementById("chat-section").classList.remove("mobile-chat-active");
 }
 
 async function sendMessage() {
@@ -178,8 +215,6 @@ async function fetchMessages() {
 
             data.messages.forEach(msg => {
                 const msgDiv = document.createElement("div");
-                
-                // Мои сообщения - темные справа, чужие - светлые слева
                 msgDiv.className = `message-item ${msg.is_my ? 'my' : 'other'}`;
                 msgDiv.innerHTML = `<strong>${msg.sender}</strong>${msg.text}`;
                 
