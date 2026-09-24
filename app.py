@@ -1,119 +1,132 @@
-from flask import Flask, request, send_file, jsonify, render_template
-from flask_cors import CORS  # <-- импорт
-import pyodbc
+import os
 import uuid
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from pymongo import MongoClient
 
 app = Flask(__name__)
-CORS(app)  # <-- разрешаем CORS для всех запросов
+CORS(app)  # Разрешаем запросы с GitHub Pages
+
+# Подключение к MongoDB
+mongo_uri = "mongodb+srv://daniilmax09_db_user:H3RgcaHz7vfxTr6Y@mychat.p0eb99n.mongodb.net/?appName=MyChat&compressors=zlib"
+client = MongoClient(mongo_uri)
+
+# Создаем/выбираем базу данных и коллекции
+db = client['chat_db']
+users_collection = db['users']
+messages_collection = db['messages']
+
+# Хранилище сессий в памяти
+sessions = {}
+
 
 @app.route('/')
 def home():
-    return render_template('index.html')
-
-sessions = {}
-
-conn = pyodbc.connect(
-    r"DRIVER={ODBC Driver 17 for SQL Server};"
-    r"SERVER=(localdb)\MSSQLLocalDB;"
-    r"DATABASE=TestDB;"
-    r"Trusted_Connection=yes;"
-)
-cursor = conn.cursor()
-
-def get_user_info(login):
-    cursor.execute(
-        "SELECT id, login, password FROM users WHERE login = ?",
-        (login,)
-    )
-    return cursor.fetchone()
+    return "Flask + MongoDB backend is running!"
 
 
 @app.route("/login", methods=["POST"])
 def checklogin():
     data = request.json
-    login = data['log']
-    password = data['pas']
-    user_data = get_user_info(login)
-    if user_data != None:
-        id, login_base, password_base = user_data
-        if password == password_base:
+    login = data.get('log')
+    password = data.get('pas')
+
+    # Ищем пользователя в MongoDB
+    user = users_collection.find_one({"login": login})
+
+    if user:
+        if user['password'] == password:
             session_id = str(uuid.uuid4())
-            sessions[session_id] = id
-            print(session_id)
-            print("sessions - ", sessions[session_id])
+            # В MongoDB у каждого документа есть уникальный _id (приводим к str)
+            user_id = str(user['_id'])
+            sessions[session_id] = user_id
+
             return jsonify({
                 "message": "Вы успешно вошли в свой аккаунт!",
                 "session_id": session_id
             })
         else:
-              return jsonify({
-                  "message": "Неверный пароль!"
-              })
-    else: return jsonify({
-        "message": "Данного аккаунта не существует, зарегестрируйтесь пожалуйста!"
-    })
+            return jsonify({"message": "Неверный пароль!"})
+    else:
+        return jsonify({"message": "Данного аккаунта не существует, зарегистрируйтесь пожалуйста!"})
 
 
 @app.route("/register", methods=["POST"])
 def registration():
     data = request.json
-    login = data['log']
-    password = data['pas']
-    user_data = get_user_info(login)
-    if user_data == None:
-        cursor.execute("INSERT INTO users (login, password) VALUES (?,?)", (login,password))
-        conn.commit()
-    else: return "Данный логин уже занят"
-    return "Вы успешно зарегестрированы!"
+    login = data.get('log')
+    password = data.get('pas')
+
+    # Проверяем, существует ли логин
+    user = users_collection.find_one({"login": login})
+
+    if user is None:
+        # Создаем нового пользователя
+        users_collection.insert_one({
+            "login": login,
+            "password": password
+        })
+        return "Вы успешно зарегистрированы!"
+    else:
+        return "Данный логин уже занят"
+
 
 @app.route("/save", methods=["POST"])
 def save():
     data = request.json
-    text = data['text']
-    session_id = data['session_id']
-    print(session_id)
-    user_id = sessions.get(session_id) #Кто отправляет
-    address = data["address"]     #Кому отправляют
-    cursor.execute("SELECT id FROM users WHERE login = ?",(address,))
-    address_id_cort = cursor.fetchone()
-    address_id = address_id_cort[0]
-    if user_id is None:
+    text = data.get('text')
+    session_id = data.get('session_id')
+    address_login = data.get('address')  # Логин получателя
+
+    user_id = sessions.get(session_id)  # ID отправителя
+    if not user_id:
         return "Вы не авторизованы", 401
-    print("Попытка вставки:", text)
 
-    cursor.execute("INSERT INTO Messages (TextMessage, Sender, ReceiverId) VALUES (?,?,?)",(text, user_id, address_id))
-    conn.commit()
+    # Ищем получателя по его логину
+    recipient = users_collection.find_one({"login": address_login})
+    if not recipient:
+        return "Получатель не найден", 404
 
-    # Проверка: получаем все строки из таблицы
-    cursor.execute("SELECT * FROM Messages")
-    rows = cursor.fetchall()
-    print("Сейчас в таблице:", rows)
+    recipient_id = str(recipient['_id'])
+
+    # Сохраняем сообщение в MongoDB
+    messages_collection.insert_one({
+        "text": text,
+        "sender_id": user_id,
+        "receiver_id": recipient_id
+    })
 
     return "Сохранено!"
 
+
 @app.route("/getlm", methods=["POST"])
 def getlm():
-    print("getlm start")
-    session_id = request.json["session_id"]
-    print("session_id", session_id)
-    user_id = sessions[session_id]
-    print("user_id", user_id)
-    cursor.execute(
-                   """
-                   SELECT TOP 1 TextMessage
-                   FROM Messages
-                   WHERE ReceiverId = ?          
-                   ORDER BY ID DESC
-                   """,
-                   (user_id,)
-                   )
-    row = cursor.fetchone()
-    print("Row:", row)
-    lastm = row[0] if row else "None"
-    print("Последнее сообщение:", lastm)
+    data = request.json
+    session_id = data.get("session_id")
+
+    user_id = sessions.get(session_id)
+    if not user_id:
+        return jsonify({"backm": "None"}), 401
+
+    # Получаем ПОСЛЕДНЕЕ сообщение для этого пользователя
+    # sort([('_id', -1)]) берет самый свежий документ
+    last_message = messages_collection.find_one(
+        {"receiver_id": user_id},
+        sort=[('_id', -1)]
+    )
+
+    lastm = last_message["text"] if last_message else "None"
     return jsonify({"backm": lastm})
+
+
 @app.route("/erase")
 def erase():
-    cursor.execute("TRUNCATE TABLE Messages")
-    return 0
-app.run(port=3000)
+    # Очищаем таблицу сообщений
+    messages_collection.delete_many({})
+    return "0"
+
+
+if __name__ == "__main__":
+    # Для деплоя на Render важно слушать порт из переменных окружения
+    port = int(os.environ.get("PORT", 3000))
+    app.run(host="0.0.0.0", port=port)
