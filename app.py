@@ -10,7 +10,6 @@ from bson.objectid import ObjectId
 app = Flask(__name__)
 CORS(app)
 
-# Глобальный перехватчик CORS OPTIONS
 @app.before_request
 def handle_options():
     if request.method == "OPTIONS":
@@ -20,7 +19,6 @@ def handle_options():
         response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         return response, 200
 
-# Подключение к MongoDB с передачей SSL-сертификата certifi
 MONGO_URI = os.environ.get("MONGO_URI", "your_fallback_mongo_uri_here")
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 
@@ -52,7 +50,8 @@ def checklogin():
 
         return jsonify({
             "message": "Вы успешно вошли!",
-            "session_id": session_id
+            "session_id": session_id,
+            "my_login": login
         }), 200
 
     return jsonify({"error": "Неверный логин или пароль!"}), 401
@@ -103,20 +102,35 @@ def save():
 
     return jsonify({"message": "Сообщение отправлено!"}), 200
 
-# Эндпоинт получения списка сообщений (всех или только новых)
+# Эндпоинт получения диалога с конкретным пользователем
 @app.route("/get_messages", methods=["POST"])
 def get_messages():
     data = request.get_json() or {}
     session_id = data.get("session_id")
     last_id = data.get("last_id")
+    chat_with = data.get("address") # С кем ведем диалог
 
     user_id = sessions.get(session_id)
     if not user_id:
         return jsonify({"error": "Неавторизован"}), 401
 
-    query = {"receiver_id": user_id}
+    if not chat_with:
+        return jsonify({"messages": []}), 200
 
-    # Если передан last_id, запрашиваем только более свежие записи
+    other_user = users_collection.find_one({"login": chat_with})
+    if not other_user:
+        return jsonify({"messages": []}), 200
+
+    other_id = str(other_user['_id'])
+
+    # Ищем диалог в обе стороны (мои ему ИЛИ его мне)
+    query = {
+        "$or": [
+            {"sender_id": user_id, "receiver_id": other_id},
+            {"sender_id": other_id, "receiver_id": user_id}
+        ]
+    }
+
     if last_id:
         try:
             query["_id"] = {"$gt": ObjectId(last_id)}
@@ -127,19 +141,12 @@ def get_messages():
 
     message_list = []
     for msg in new_messages:
-        # Поиск логина отправителя по его _id
-        sender_id_val = msg["sender_id"]
-        if isinstance(sender_id_val, str) and len(sender_id_val) == 24:
-            sender = users_collection.find_one({"_id": ObjectId(sender_id_val)})
-        else:
-            sender = users_collection.find_one({"_id": sender_id_val})
-
-        sender_login = sender["login"] if sender else "Неизвестный"
-
+        is_my = (msg["sender_id"] == user_id)
         message_list.append({
             "id": str(msg["_id"]),
-            "sender": sender_login,
-            "text": msg["text"]
+            "sender": "Я" if is_my else chat_with,
+            "text": msg["text"],
+            "is_my": is_my
         })
 
     return jsonify({"messages": message_list}), 200
