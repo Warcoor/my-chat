@@ -1,5 +1,6 @@
 import os
 import uuid
+import certifi
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from pymongo import MongoClient
@@ -8,7 +9,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 CORS(app)
 
-# ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК OPTIONS (закрывает проблему с CORS раз и навсегда)
+# Глобальный перехватчик CORS OPTIONS
 @app.before_request
 def handle_options():
     if request.method == "OPTIONS":
@@ -18,8 +19,9 @@ def handle_options():
         response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         return response, 200
 
+# Подключение к MongoDB с передачей SSL-сертификата certifi
 MONGO_URI = os.environ.get("MONGO_URI", "your_fallback_mongo_uri_here")
-client = MongoClient(MONGO_URI)
+client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 
 db = client['chat_db']
 users_collection = db['users']
