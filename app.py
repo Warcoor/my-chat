@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Подключение через переменную окружения
 MONGO_URI = os.environ.get("MONGO_URI", "your_fallback_mongo_uri_here")
@@ -23,7 +23,7 @@ sessions = {}
 def home():
     return jsonify({"status": "ok", "message": "Backend is running"})
 
-@app.route("/login", methods=["POST"])
+@app.route("/login", methods=["POST", "OPTIONS"])
 def checklogin():
     data = request.get_json() or {}
     login = data.get('log')
@@ -46,7 +46,7 @@ def checklogin():
 
     return jsonify({"error": "Неверный логин или пароль!"}), 401
 
-@app.route("/register", methods=["POST"])
+@app.route("/register", methods=["POST", "OPTIONS"])
 def registration():
     data = request.get_json() or {}
     login = data.get('log')
@@ -67,7 +67,7 @@ def registration():
 
     return jsonify({"message": "Вы успешно зарегистрированы!"}), 201
 
-@app.route("/save", methods=["POST"])
+@app.route("/save", methods=["POST", "OPTIONS"])
 def save():
     data = request.get_json() or {}
     text = data.get('text')
@@ -93,7 +93,7 @@ def save():
 
     return jsonify({"message": "Сообщение отправлено!"}), 200
 
-@app.route("/getlm", methods=["POST"])
+@app.route("/getlm", methods=["POST", "OPTIONS"])
 def getlm():
     data = request.get_json() or {}
     session_id = data.get("session_id")
