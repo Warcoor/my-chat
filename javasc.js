@@ -1,97 +1,99 @@
 const API_URL = "https://mychat-backend-gnp6.onrender.com";
 
-function Login() {
+async function Login() {
     const login = document.getElementById("login").value;
     const pass = document.getElementById("password").value;
 
-    fetch(`${API_URL}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ log: login, pas: pass })
-    })
-    .then(res => res.json())
-    .then(data => {
-        console.log(data);
+    try {
+        const res = await fetch(`${API_URL}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ log: login, pas: pass })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Ошибка входа");
+
         alert(data.message);
         if (data.session_id) {
             localStorage.setItem("session_id", data.session_id);
         }
-    })
-    .catch(err => alert("Ошибка подключения к серверу (возможно, он просыпается): " + err));
+    } catch (err) {
+        alert(err.message);
+    }
 }
 
-function Register() {
+async function Register() {
     const login = document.getElementById("login").value;
     const pass = document.getElementById("password").value;
 
-    fetch(`${API_URL}/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ log: login, pas: pass })
-    })
-    .then(res => res.text())
-    .then(data => alert(data))
-    .catch(err => alert("Ошибка при регистрации: " + err));
+    try {
+        const res = await fetch(`${API_URL}/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ log: login, pas: pass })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Ошибка регистрации");
+
+        alert(data.message);
+    } catch (err) {
+        alert(err.message);
+    }
 }
 
-function sendData() {
-    const message = document.getElementById("message").value;
+async function sendData() {
+    const messageInput = document.getElementById("message");
+    const adressInput = document.getElementById("Who");
     const session_id = localStorage.getItem("session_id");
-    const adress = document.getElementById("Who").value;
 
     if (!session_id) {
         alert("Вы не авторизованы!");
         return;
     }
 
-    if (adress !== "") {
-        fetch(`${API_URL}/save`, {
-            method: "POST", // Исправлено с "Post" на "POST"
+    try {
+        const res = await fetch(`${API_URL}/save`, {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                text: message,
+                text: messageInput.value,
                 session_id: session_id,
-                address: adress
+                address: adressInput.value
             })
-        })
-        .then(res => res.text())
-        .then(data => alert(data))
-        .catch(err => alert("Ошибка отправки: " + err));
-    } else {
-        alert("Укажите получателя!");
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Ошибка отправки");
+
+        alert(data.message);
+        messageInput.value = "";
+    } catch (err) {
+        alert(err.message);
     }
 }
 
-function getData() {
+async function getData() {
     const session_id = localStorage.getItem("session_id");
 
-    if (!session_id) return;
+    if (!session_id) {
+        alert("Авторизуйтесь, чтобы получать сообщения");
+        return;
+    }
 
-    fetch(`${API_URL}/getlm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: session_id })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.backm) {
+    try {
+        const res = await fetch(`${API_URL}/getlm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: session_id })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.backm) {
             document.getElementById("phrase").innerText = data.backm;
         }
-    })
-    .catch(err => console.error("Ошибка получения данных:", err));
-}
-
-function erase() {
-    fetch(`${API_URL}/erase`)
-        .then(res => res.text())
-        .then(() => {
-            const dl = document.getElementById("dl");
-            if (dl) dl.showModal();
-        })
-        .catch(err => alert("Не удалось очистить: " + err));
-}
-
-function clos() {
-    const dl = document.getElementById("dl");
-    if (dl) dl.close();
+    } catch (err) {
+        console.error("Ошибка получения данных:", err);
+    }
 }

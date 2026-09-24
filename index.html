@@ -1,30 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>MyChat</title>
 </head>
-<body style="background-color: rgb(54, 56, 64)">
+<body style="background-color: rgb(54, 56, 64); color: white;">
 
-    <input type="text" id="login" />
-    <br><input type="password" id="password" />
-    <br><button onclick="Login()">Login</button>
-    <button onclick="Register()">Register</button>
-    <p></p>
-    <!--
-    <input type="text" id="message" />
-    -->
-    <tab></tab>
-    <button onclick="sendData()">Save</button>
-    <br><input type="text" id="Who">
-    <p id="phrase">Последняя фраза</p>
-    <button onclick="getData()">Load</button>
-    <button onclick="erase()">Delete</button>
-    <dialog id="dl">
-        Delete complete!
-        <button onclick="clos()">Close</button>
-    </dialog>
+    <div>
+        <input type="text" id="login" placeholder="Логин" />
+        <input type="password" id="password" placeholder="Пароль" />
+        <button onclick="Login()">Войти</button>
+        <button onclick="Register()">Регистрация</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <input type="text" id="Who" placeholder="Кому (логин)">
+        <input type="text" id="message" placeholder="Сообщение" />
+        <button onclick="sendData()">Отправить</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <p id="phrase">Последнее сообщение появится тут</p>
+        <button onclick="getData()">Загрузить сообщение</button>
+    </div>
+
     <script src="javasc.js"></script>
 </body>
 </html>
