@@ -1,8 +1,9 @@
 // URL вашего сервера на Render
-const API_URL = "https://mychat-backend-gnp6.onrender.com";
+const API_URL = "https://mychat-backend.onrender.com";
 
-const POLL_MS = 2000;
-const TYPING_THROTTLE_MS = 2500;
+const POLL_ACTIVE_MS = 1000;   // чат открыт и вкладка видна
+const POLL_IDLE_MS = 3000;     // иначе реже
+const TYPING_THROTTLE_MS = 1500;
 const TOKEN_KEY = "mychat_token";
 
 // ------------------------------------------------------------ Состояние
@@ -15,8 +16,8 @@ let lastSender = null;          // для группировки сообщен�
 let renderedIds = new Set();    // защита от повторного показа одного сообщения
 let pollTimer = null;
 let polling = false;
-let sending = false;
-let pending = null;             // {chatId, text, clientId} - одно и то же сообщение = один client_id
+let localJobs = new Map();      // отправляемые сообщения: client_id -> job
+let pollGen = 0;
 let lastTypingSent = 0;
 let lastListSig = "";
 
@@ -132,7 +133,8 @@ function resetSession() {
     token = null;
     me = null;
     localStorage.removeItem(TOKEN_KEY);
-    clearInterval(pollTimer);
+    pollGen++;
+    clearTimeout(pollTimer);
     pollTimer = null;
     chats = [];
     activeId = null;
@@ -152,9 +154,9 @@ function startApp(user) {
     chats = [];
     lastListSig = "";
     showEmptyPane();
-    poll();
-    clearInterval(pollTimer);
-    pollTimer = setInterval(poll, POLL_MS);
+    pollGen++;
+    clearTimeout(pollTimer);
+    pollLoop(pollGen);
 }
 
 // ------------------------------------------------------------ Опрос сервера
@@ -176,6 +178,14 @@ async function poll() {
     } finally {
         polling = false;
     }
+}
+
+async function pollLoop(gen) {
+    if (gen !== pollGen || !token) return;
+    await poll();
+    if (gen !== pollGen || !token) return;
+    const fast = activeId && document.visibilityState === "visible";
+    pollTimer = setTimeout(() => pollLoop(gen), fast ? POLL_ACTIVE_MS : POLL_IDLE_MS);
 }
 
 function setChats(list) {
@@ -277,7 +287,7 @@ async function openChat(chatId) {
     lastMsgId = null;
     lastSender = null;
     renderedIds = new Set();
-    pending = null;
+    lastTypingSent = 0;
 
     $("messages").replaceChildren();
     $("message-text").value = "";
@@ -315,84 +325,134 @@ function showNoMessages() {
     }
 }
 
-function appendMessages(list, forceScroll = false) {
-    const box = $("messages");
-    const fresh = list.filter((m) => !renderedIds.has(m.id));
-    if (!fresh.length) return;
+function timeLabel(iso) {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
-    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
-    const empty = box.querySelector(".no-msgs");
+function removeEmptyNote() {
+    const empty = $("messages").querySelector(".no-msgs");
     if (empty) empty.remove();
+}
 
+function buildRow(m, pending = false) {
     const c = activeChat();
     const isGroup = c ? c.type === "group" : false;
+    const mine = m.sender_id === me.id;
+    const firstInRun = lastSender !== m.sender_id;
+    lastSender = m.sender_id;
 
-    for (const m of fresh) {
+    const row = el("div", "msg" + (mine ? " out" : "") + (firstInRun ? " gap" : "") + (pending ? " pending" : ""));
+
+    if (!mine) {
+        const slot = el("div", "avatar-slot");
+        if (firstInRun) slot.appendChild(makeAvatar(m.sender, true));
+        row.appendChild(slot);
+    }
+
+    const bubble = el("div", "bubble");
+    if (!mine && isGroup && firstInRun) {
+        const author = el("span", "author", m.sender);
+        author.style.color = avatarColor(m.sender);
+        bubble.appendChild(author);
+    }
+    bubble.appendChild(document.createTextNode(m.text));
+    bubble.appendChild(el("span", "time", timeLabel(m.created_at)));
+    row.appendChild(bubble);
+    return row;
+}
+
+function appendMessages(list, forceScroll = false) {
+    const box = $("messages");
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    let added = false;
+    let mineAdded = false;
+
+    for (const m of list) {
+        if (renderedIds.has(m.id)) continue;
+
+        // Это наше собственное сообщение, которое уже показано на экране - просто подтверждаем его
+        const job = m.client_id ? localJobs.get(m.client_id) : null;
+        if (job && !job.done && job.el.isConnected) {
+            confirmJob(job, m);
+            continue;
+        }
+
         renderedIds.add(m.id);
         if (!lastMsgId || m.id > lastMsgId) lastMsgId = m.id;
-
-        const mine = m.sender_id === me.id;
-        const firstInRun = lastSender !== m.sender_id;
-        lastSender = m.sender_id;
-
-        const row = el("div", "msg" + (mine ? " out" : "") + (firstInRun ? " gap" : ""));
-
-        if (!mine) {
-            const slot = el("div", "avatar-slot");
-            if (firstInRun) slot.appendChild(makeAvatar(m.sender, true));
-            row.appendChild(slot);
-        }
-
-        const bubble = el("div", "bubble");
-        if (!mine && isGroup && firstInRun) {
-            const author = el("span", "author", m.sender);
-            author.style.color = avatarColor(m.sender);
-            bubble.appendChild(author);
-        }
-        bubble.appendChild(document.createTextNode(m.text));
-        bubble.appendChild(el("span", "time", new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
-        row.appendChild(bubble);
-        box.appendChild(row);
+        removeEmptyNote();
+        box.appendChild(buildRow(m));
+        added = true;
+        if (m.sender_id === me.id) mineAdded = true;
     }
 
-    if (forceScroll || nearBottom || fresh.some((m) => m.sender_id === me.id)) {
-        box.scrollTop = box.scrollHeight;
-    }
+    if (added && (forceScroll || nearBottom || mineAdded)) box.scrollTop = box.scrollHeight;
 }
 
 // ------------------------------------------------------------ Отправка
-async function sendMessage() {
-    if (sending || !activeId) return;
+// Сообщение появляется на экране мгновенно (серым), а на сервер уходит в фоне.
+// Поле ввода очищается сразу, поэтому новый текст никогда не смешивается со старым.
+function sendMessage() {
+    if (!activeId) return;
     const input = $("message-text");
     const text = input.value.trim();
     if (!text) return;
 
-    // Один и тот же текст в одном чате = один client_id, поэтому повторный запрос не создаст дубль
-    if (!pending || pending.text !== text || pending.chatId !== activeId) {
-        pending = { chatId: activeId, text, clientId: uuid() };
-    }
-    const job = pending;
+    input.value = "";
+    input.focus();
+    lastTypingSent = 0;
 
-    sending = true;
-    $("btn-send").disabled = true;
+    const job = { chatId: activeId, text, clientId: uuid(), done: false, el: null };
+    localJobs.set(job.clientId, job);
+
+    removeEmptyNote();
+    const box = $("messages");
+    job.el = buildRow(
+        { id: "local-" + job.clientId, sender_id: me.id, sender: me.login, text, created_at: new Date().toISOString() },
+        true
+    );
+    job.el.addEventListener("click", () => {
+        if (job.el.classList.contains("failed")) postJob(job);
+    });
+    box.appendChild(job.el);
+    box.scrollTop = box.scrollHeight;
+
+    postJob(job);
+}
+
+async function postJob(job) {
+    const timeEl = job.el.querySelector(".time");
+    job.el.classList.remove("failed");
+    job.el.classList.add("pending");
+    if (timeEl) timeEl.textContent = "отправка…";
+
     try {
         const data = await api(`/chats/${job.chatId}/messages`, {
             method: "POST",
             body: { text: job.text, client_id: job.clientId },
         });
-        if (pending === job) pending = null;
-        if (input.value.trim() === job.text) input.value = "";
-        if (job.chatId === activeId) appendMessages([data.message], true);
+        if (!job.done) confirmJob(job, data.message);
         poll();
     } catch (e) {
-        alert(e.message);
-    } finally {
-        sending = false;
-        $("btn-send").disabled = false;
-        input.focus();
+        if (job.done) return;
+        job.el.classList.remove("pending");
+        job.el.classList.add("failed");
+        if (timeEl) timeEl.textContent = "Не отправлено, нажмите, чтобы повторить";
     }
 }
 
+function confirmJob(job, m) {
+    job.done = true;
+    localJobs.delete(job.clientId);
+    renderedIds.add(m.id);
+    if (job.chatId === activeId && (!lastMsgId || m.id > lastMsgId)) lastMsgId = m.id;
+    if (job.el.isConnected) {
+        job.el.classList.remove("pending", "failed");
+        const t = job.el.querySelector(".time");
+        if (t) t.textContent = timeLabel(m.created_at);
+    }
+}
+
+// Статус «печатает…»: первый сигнал уходит сразу с первой буквы, дальше не чаще раза в 1,5 с
 function onTyping() {
     if (!activeId || !$("message-text").value.trim()) return;
     const t = Date.now();
@@ -571,6 +631,25 @@ $("message-text").addEventListener("keydown", (e) => {
 });
 $("message-text").addEventListener("input", onTyping);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+
+// ------------------------------------------------------------ Мобильная клавиатура
+// Высота приложения = видимая область экрана, поэтому шапка остаётся на месте,
+// а поле ввода поднимается над клавиатурой.
+function syncViewport() {
+    const vv = window.visualViewport;
+    document.documentElement.style.setProperty("--app-h", (vv ? vv.height : window.innerHeight) + "px");
+    window.scrollTo(0, 0);
+}
+if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncViewport);
+    window.visualViewport.addEventListener("scroll", syncViewport);
+}
+window.addEventListener("resize", syncViewport);
+syncViewport();
+
+$("message-text").addEventListener("focus", () => {
+    setTimeout(() => { const b = $("messages"); b.scrollTop = b.scrollHeight; }, 300);
+});
 
 (async function init() {
     if (!token) return;
