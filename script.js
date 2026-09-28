@@ -1,5 +1,5 @@
 // URL вашего сервера на Render
-const API_URL = "https://mychat-backend.onrender.com";
+const API_URL = "https://mychat-backend-gnp6.onrender.com";
 
 const POLL_MS = 2000;
 const TYPING_THROTTLE_MS = 2500;
