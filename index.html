@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
     <title>MyChat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -188,8 +188,11 @@
         .bubble .author { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 1px; }
         .bubble .time { float: right; margin: 6px 0 0 12px; font-size: 11px; opacity: .6; line-height: 1; }
         .no-msgs { margin: auto; color: var(--muted); }
+        .msg.pending .bubble { opacity: .65; }
+        .msg.failed .bubble { background: var(--danger); color: #fff; cursor: pointer; }
+        .msg.failed .bubble .time { opacity: .9; }
 
-        .composer { display: flex; gap: 8px; padding: 10px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+        .composer { display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); }
         .composer .field { margin: 0; flex: 1; border-radius: 22px; padding: 11px 16px; }
         .composer .btn { border-radius: 22px; padding: 0 20px; }
 
@@ -224,6 +227,12 @@
 
         /* ---------- Мобильная версия ---------- */
         @media (max-width: 760px) {
+            /* Экран не прокручивается целиком: шапка чата всегда на месте, скроллится только лента сообщений */
+            html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; }
+            #app, #auth { height: var(--app-h, 100%); }
+            #auth { overflow-y: auto; }
+            .chat-head { position: sticky; top: 0; z-index: 2; flex: none; }
+            .composer { flex: none; }
             .sidebar { width: 100%; border-right: none; }
             .pane { display: none; }
             #app.chat-open .sidebar { display: none; }
