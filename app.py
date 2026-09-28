@@ -47,7 +47,6 @@ def err(message, code=400):
 
 
 def as_str(v):
-    """Принимаем только строки. Защита от NoSQL-инъекций."""
     return v if isinstance(v, str) else None
 
 
@@ -72,7 +71,7 @@ def validate_password(password):
     if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
         return "Пароль должен содержать хотя бы одну букву и одну цифру"
     if " " in password:
-        return "Пароль не должен содержать пробелов"
+        return "Пароль не дол��ен содержать пробелов"
     return None
 
 
@@ -97,7 +96,6 @@ def user_dto(u):
 
 
 def init_db():
-    # Старым пользователям добавляем login_lower
     for u in users_col.find({"login_lower": {"$exists": False}}):
         users_col.update_one({"_id": u["_id"]}, {"$set": {"login_lower": u["login"].lower()}})
 
@@ -154,6 +152,16 @@ def users_map(ids):
     return {u["_id"]: u for u in users_col.find({"_id": {"$in": list(ids)}})}
 
 
+def get_message_by_user(chat_id, message_id):
+    chat = get_chat_for_user(chat_id)
+    if not chat:
+        return None
+    mid = as_oid(message_id)
+    if not mid:
+        return None
+    return messages_col.find_one({"_id": mid, "chat_id": chat["_id"]})
+
+
 def message_dto(m, umap):
     sender = umap.get(m["sender_id"])
     return {
@@ -168,6 +176,10 @@ def message_dto(m, umap):
         "reply_to": m.get("reply_to"),
         "reply_to_text": m.get("reply_to_text"),
         "read_by": [str(uid) for uid in m.get("read_by", [])],
+        "reaction": m.get("reaction"),
+        "pinned": bool(m.get("pinned")),
+        "edited": bool(m.get("edited")),
+        "deleted": bool(m.get("deleted")),
     }
 
 
@@ -299,7 +311,7 @@ def login_route():
     users_col.update_one({"_id": user["_id"]}, {"$set": {"last_seen": now()}})
     token = secrets.token_urlsafe(32)
     sessions_col.insert_one({"token": token, "user_id": user["_id"], "created_at": now()})
-    return jsonify({"token": token, "user": user_dto(users_col.find_one({"_id": user["_id"]}))})
+    return jsonify({"token": token, "user": user_dto(users_col.find_one({"_id": user["_id"]))})})
 
 
 @app.post("/logout")
@@ -343,7 +355,7 @@ def patch_me():
     if "avatar" in data:
         avatar = as_str(data.get("avatar"))
         if avatar is not None:
-            if len(avatar) > 2000000:  # 2MB base64 limit
+            if len(avatar) > 2000000:
                 return err("Аватарка слишком большая")
             update["avatar"] = avatar
 
@@ -398,7 +410,7 @@ def add_contact():
     try:
         contacts_col.insert_one({"owner_id": g.user["_id"], "contact_id": target["_id"], "created_at": now()})
     except DuplicateKeyError:
-        pass  # уже в контактах
+        pass
 
     chat = get_or_create_private_chat(g.user["_id"], target["_id"])
     return jsonify({"contact": user_dto(target), "chat": chat_dto_by_id(chat["_id"], g.user)}), 201
@@ -456,7 +468,7 @@ def get_messages(chat_id):
     if not chat:
         return err("Чат не найден", 404)
 
-    q = {"chat_id": chat["_id"]}
+    q = {"chat_id": chat["_id"], "deleted": {"$ne": True}}
     after = as_oid(request.args.get("after"))
     if after:
         q["_id"] = {"$gt": after}
@@ -501,6 +513,10 @@ def send_message(chat_id):
         "client_id": client_id,
         "created_at": now(),
         "read_by": [me["_id"]],
+        "reaction": None,
+        "pinned": False,
+        "edited": False,
+        "deleted": False,
     }
     try:
         doc["_id"] = messages_col.insert_one(doc).inserted_id
@@ -523,6 +539,81 @@ def send_message(chat_id):
     return jsonify({"message": message_dto(doc, {me["_id"]: me})}), 201
 
 
+@app.patch("/chats/<chat_id>/messages/<message_id>")
+@auth_required
+def edit_message(chat_id, message_id):
+    msg = get_message_by_user(chat_id, message_id)
+    if not msg:
+        return err("Сообщение не найдено", 404)
+    if str(msg["sender_id"]) != str(g.user["_id"]):
+        return err("Нельзя редактировать чужое сообщение", 403)
+
+    data = request.get_json(silent=True) or {}
+    if "text" in data:
+        text = as_str(data.get("text")) or ""
+        text = text.strip()
+        if not text:
+            return err("Текст не может быть пустым")
+        msg["text"] = text
+        msg["edited"] = True
+        messages_col.update_one({"_id": msg["_id"]}, {"$set": {"text": text, "edited": True}})
+
+    if "reaction" in data:
+        reaction = as_str(data.get("reaction"))
+        if reaction is not None:
+            messages_col.update_one({"_id": msg["_id"]}, {"$set": {"reaction": reaction}})
+
+    if "pinned" in data:
+        pinned = bool(data.get("pinned"))
+        messages_col.update_one({"_id": msg["_id"]}, {"$set": {"pinned": pinned}})
+
+    updated = messages_col.find_one({"_id": msg["_id"]})
+    return jsonify({"message": message_dto(updated, {updated["sender_id"]: g.user})})
+
+
+@app.post("/chats/<chat_id>/messages/<message_id>/react")
+@auth_required
+def add_reaction(chat_id, message_id):
+    msg = get_message_by_user(chat_id, message_id)
+    if not msg:
+        return err("Сообщение не найдено", 404)
+
+    data = request.get_json(silent=True) or {}
+    emoji = as_str(data.get("emoji"))
+    if not emoji:
+        return err("Укажите реакцию")
+
+    messages_col.update_one({"_id": msg["_id"]}, {"$set": {"reaction": emoji}})
+    updated = messages_col.find_one({"_id": msg["_id"]})
+    return jsonify({"message": message_dto(updated, {updated["sender_id"]: g.user})})
+
+
+@app.post("/chats/<chat_id>/messages/<message_id>/pin")
+@auth_required
+def pin_message(chat_id, message_id):
+    msg = get_message_by_user(chat_id, message_id)
+    if not msg:
+        return err("Сообщение не найдено", 404)
+
+    pinned = not bool(msg.get("pinned"))
+    messages_col.update_one({"_id": msg["_id"]}, {"$set": {"pinned": pinned}})
+    updated = messages_col.find_one({"_id": msg["_id"]})
+    return jsonify({"message": message_dto(updated, {updated["sender_id"]: g.user})})
+
+
+@app.delete("/chats/<chat_id>/messages/<message_id>")
+@auth_required
+def delete_message(chat_id, message_id):
+    msg = get_message_by_user(chat_id, message_id)
+    if not msg:
+        return err("Сообщение не найдено", 404)
+    if str(msg["sender_id"]) != str(g.user["_id"]):
+        return err("Нельзя удалить чужое сообщение", 403)
+
+    messages_col.update_one({"_id": msg["_id"]}, {"$set": {"deleted": True, "text": "", "image": None}})
+    return jsonify({"ok": True})
+
+
 @app.post("/chats/<chat_id>/typing")
 @auth_required
 def typing(chat_id):
@@ -543,15 +634,15 @@ def mark_read(chat_id):
     chat = get_chat_for_user(chat_id)
     if not chat:
         return err("Чат не найден", 404)
-    
-    latest = messages_col.find_one({"chat_id": chat["_id"]}, sort=[("_id", DESCENDING)])
+
+    latest = messages_col.find_one({"chat_id": chat["_id"], "deleted": {"$ne": True}}, sort=[("_id", DESCENDING)])
     if latest:
         messages_col.update_many(
             {"chat_id": chat["_id"], "_id": {"$lte": latest["_id"]}, "read_by": {"$ne": g.user["_id"]}},
             {"$addToSet": {"read_by": g.user["_id"]}},
         )
         chats_col.update_one({"_id": chat["_id"]}, {"$set": {f"read.{g.user['_id']}": str(latest["_id"])}})
-    
+
     return jsonify({"ok": True})
 
 
@@ -559,17 +650,15 @@ def mark_read(chat_id):
 @app.get("/poll")
 @auth_required
 def poll():
-    """Один запрос вместо нескольких: список чатов + новые сообщения открытого чата."""
     me = g.user
     result = {"chat_id": None, "messages": []}
 
-    # Обновляем last_seen при каждом polling запросе
     users_col.update_one({"_id": me["_id"]}, {"$set": {"last_seen": now()}})
 
     chat = get_chat_for_user(request.args.get("chat_id")) if request.args.get("chat_id") else None
     if chat:
         result["chat_id"] = str(chat["_id"])
-        q = {"chat_id": chat["_id"]}
+        q = {"chat_id": chat["_id"], "deleted": {"$ne": True}}
         after = as_oid(request.args.get("after"))
         if after:
             q["_id"] = {"$gt": after}
@@ -577,9 +666,8 @@ def poll():
         umap = users_map({m["sender_id"] for m in msgs})
         result["messages"] = [message_dto(m, umap) for m in msgs]
 
-        # отмечаем прочитанным, только если вкладка открыта
         if request.args.get("read") == "1":
-            latest = messages_col.find_one({"chat_id": chat["_id"]}, sort=[("_id", DESCENDING)])
+            latest = messages_col.find_one({"chat_id": chat["_id"], "deleted": {"$ne": True}}, sort=[("_id", DESCENDING)])
             if latest:
                 messages_col.update_many(
                     {"chat_id": chat["_id"], "_id": {"$lte": latest["_id"]}, "read_by": {"$ne": me["_id"]}},
