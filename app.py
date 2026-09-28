@@ -13,11 +13,11 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # максимум 64 КБ на запрос
-CORS(app)  # flask-cors сам обрабатывает OPTIONS и заголовок Authorization
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 МБ для фото
+CORS(app)
 
 # ---------------------------------------------------------------- БД
-MONGO_URI = os.environ["MONGO_URI"]  # обязательно задаётся в Render -> Environment
+MONGO_URI = os.environ["MONGO_URI"]
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where(), tz_aware=True)
 db = client["chat_db"]
 
@@ -25,7 +25,7 @@ users_col = db["users"]
 sessions_col = db["sessions"]
 contacts_col = db["contacts"]
 chats_col = db["chats"]
-messages_col = db["chat_messages"]  # новая коллекция (старая "messages" больше не используется)
+messages_col = db["chat_messages"]
 typing_col = db["typing"]
 
 # ---------------------------------------------------------------- Ограничения
@@ -38,34 +38,6 @@ SESSION_DAYS = 30
 TYPING_TTL_SECONDS = 3
 
 
-def init_db():
-    # Старым пользователям добавляем login_lower (для поиска без учёта регистра)
-    for u in users_col.find({"login_lower": {"$exists": False}}):
-        users_col.update_one({"_id": u["_id"]}, {"$set": {"login_lower": u["login"].lower()}})
-
-    def idx(col, keys, **kw):
-        try:
-            col.create_index(keys, **kw)
-        except Exception as e:  # например, если в старых данных есть дубликаты логинов
-            print("Index warning:", e)
-
-    idx(users_col, [("login_lower", ASCENDING)], unique=True)
-    idx(sessions_col, [("token", ASCENDING)], unique=True)
-    idx(sessions_col, [("created_at", ASCENDING)], expireAfterSeconds=SESSION_DAYS * 86400)
-    idx(contacts_col, [("owner_id", ASCENDING), ("contact_id", ASCENDING)], unique=True)
-    idx(chats_col, [("members", ASCENDING), ("updated_at", DESCENDING)])
-    idx(chats_col, [("private_key", ASCENDING)], unique=True, sparse=True)
-    idx(messages_col, [("chat_id", ASCENDING), ("_id", ASCENDING)])
-    # защита от дублей при повторной отправке одного и того же сообщения
-    idx(messages_col, [("sender_id", ASCENDING), ("client_id", ASCENDING)], unique=True)
-    idx(typing_col, [("chat_id", ASCENDING), ("user_id", ASCENDING)], unique=True)
-    idx(typing_col, [("at", ASCENDING)], expireAfterSeconds=30)
-
-
-init_db()
-
-
-# ---------------------------------------------------------------- Хелперы
 def now():
     return datetime.now(timezone.utc)
 
@@ -75,7 +47,7 @@ def err(message, code=400):
 
 
 def as_str(v):
-    """Принимаем только строки. Защита от NoSQL-инъекций вида {"$ne": ""}."""
+    """Принимаем только строки. Защита от NoSQL-инъекций."""
     return v if isinstance(v, str) else None
 
 
@@ -104,6 +76,52 @@ def validate_password(password):
     return None
 
 
+def user_online(u):
+    if not u.get("last_seen"):
+        return False
+    return now() - u["last_seen"] <= timedelta(minutes=5)
+
+
+def user_dto(u):
+    return {
+        "id": str(u["_id"]),
+        "login": u["login"],
+        "name": u.get("name") or u["login"],
+        "bio": u.get("bio", ""),
+        "avatar": u.get("avatar", ""),
+        "theme": u.get("theme", "light"),
+        "language": u.get("language", "ru"),
+        "online": user_online(u),
+        "last_seen": u.get("last_seen").isoformat() if u.get("last_seen") else None,
+    }
+
+
+def init_db():
+    # Старым пользователям добавляем login_lower
+    for u in users_col.find({"login_lower": {"$exists": False}}):
+        users_col.update_one({"_id": u["_id"]}, {"$set": {"login_lower": u["login"].lower()}})
+
+    def idx(col, keys, **kw):
+        try:
+            col.create_index(keys, **kw)
+        except Exception as e:
+            print("Index warning:", e)
+
+    idx(users_col, [("login_lower", ASCENDING)], unique=True)
+    idx(sessions_col, [("token", ASCENDING)], unique=True)
+    idx(sessions_col, [("created_at", ASCENDING)], expireAfterSeconds=SESSION_DAYS * 86400)
+    idx(contacts_col, [("owner_id", ASCENDING), ("contact_id", ASCENDING)], unique=True)
+    idx(chats_col, [("members", ASCENDING), ("updated_at", DESCENDING)])
+    idx(chats_col, [("private_key", ASCENDING)], unique=True, sparse=True)
+    idx(messages_col, [("chat_id", ASCENDING), ("_id", ASCENDING)])
+    idx(messages_col, [("sender_id", ASCENDING), ("client_id", ASCENDING)], unique=True)
+    idx(typing_col, [("chat_id", ASCENDING), ("user_id", ASCENDING)], unique=True)
+    idx(typing_col, [("at", ASCENDING)], expireAfterSeconds=30)
+
+
+init_db()
+
+
 def auth_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -122,10 +140,6 @@ def auth_required(f):
     return wrapper
 
 
-def user_dto(u):
-    return {"id": str(u["_id"]), "login": u["login"]}
-
-
 def get_chat_for_user(chat_id_str):
     cid = as_oid(chat_id_str)
     if not cid:
@@ -134,6 +148,9 @@ def get_chat_for_user(chat_id_str):
 
 
 def users_map(ids):
+    ids = [i for i in ids if i is not None]
+    if not ids:
+        return {}
     return {u["_id"]: u for u in users_col.find({"_id": {"$in": list(ids)}})}
 
 
@@ -144,9 +161,13 @@ def message_dto(m, umap):
         "chat_id": str(m["chat_id"]),
         "sender_id": str(m["sender_id"]),
         "sender": sender["login"] if sender else "Удалённый пользователь",
-        "text": m["text"],
+        "text": m.get("text", ""),
+        "image": m.get("image"),
         "created_at": m["created_at"].isoformat(),
         "client_id": m.get("client_id"),
+        "reply_to": m.get("reply_to"),
+        "reply_to_text": m.get("reply_to_text"),
+        "read_by": [str(uid) for uid in m.get("read_by", [])],
     }
 
 
@@ -206,7 +227,14 @@ def chat_dto_by_id(chat_id, me):
 
 def get_or_create_private_chat(a, b):
     key = ":".join(sorted([str(a), str(b)]))
-    doc = {"type": "private", "members": [a, b], "created_at": now(), "updated_at": now(), "read": {}}
+    doc = {
+        "type": "private",
+        "members": [a, b],
+        "created_at": now(),
+        "updated_at": now(),
+        "read": {},
+        "private_key": key,
+    }
     try:
         return chats_col.find_one_and_update(
             {"private_key": key},
@@ -218,7 +246,7 @@ def get_or_create_private_chat(a, b):
         return chats_col.find_one({"private_key": key})
 
 
-# ---------------------------------------------------------------- Авторизация
+# ================================================================ АВТОРИЗАЦИЯ
 @app.get("/")
 def home():
     return jsonify({"status": "ok", "message": "Backend is running"})
@@ -242,6 +270,12 @@ def register():
                 "login_lower": login.lower(),
                 "password": generate_password_hash(password),
                 "created_at": now(),
+                "last_seen": now(),
+                "name": login,
+                "bio": "",
+                "avatar": "",
+                "theme": "light",
+                "language": "ru",
             }
         )
     except DuplicateKeyError:
@@ -262,9 +296,10 @@ def login_route():
     if not user or not check_password_hash(user["password"], password):
         return err("Неверный логин или пароль", 401)
 
+    users_col.update_one({"_id": user["_id"]}, {"$set": {"last_seen": now()}})
     token = secrets.token_urlsafe(32)
     sessions_col.insert_one({"token": token, "user_id": user["_id"], "created_at": now()})
-    return jsonify({"token": token, "user": user_dto(user)})
+    return jsonify({"token": token, "user": user_dto(users_col.find_one({"_id": user["_id"]}))})
 
 
 @app.post("/logout")
@@ -274,13 +309,69 @@ def logout():
     return jsonify({"ok": True})
 
 
+# ================================================================ ПРОФИЛЬ
 @app.get("/me")
 @auth_required
 def me():
     return jsonify({"user": user_dto(g.user)})
 
 
-# ---------------------------------------------------------------- Контакты
+@app.patch("/me")
+@auth_required
+def patch_me():
+    data = request.get_json(silent=True) or {}
+    update = {"last_seen": now()}
+
+    if "name" in data:
+        name = as_str(data.get("name"))
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return err("Имя не может быть пустым")
+            if len(name) > 50:
+                return err("Имя слишком длинное")
+            update["name"] = name
+
+    if "bio" in data:
+        bio = as_str(data.get("bio"))
+        if bio is not None:
+            bio = bio.strip()
+            if len(bio) > 150:
+                return err("Описание слишком длинное")
+            update["bio"] = bio
+
+    if "avatar" in data:
+        avatar = as_str(data.get("avatar"))
+        if avatar is not None:
+            if len(avatar) > 2000000:  # 2MB base64 limit
+                return err("Аватарка слишком большая")
+            update["avatar"] = avatar
+
+    if "theme" in data:
+        theme = as_str(data.get("theme"))
+        if theme in {"light", "dark", "auto"}:
+            update["theme"] = theme
+
+    if "language" in data:
+        lang = as_str(data.get("language"))
+        if lang in {"ru", "en", "ua"}:
+            update["language"] = lang
+
+    if update:
+        users_col.update_one({"_id": g.user["_id"]}, {"$set": update})
+
+    user = users_col.find_one({"_id": g.user["_id"]})
+    return jsonify({"user": user_dto(user)})
+
+
+@app.post("/me/online")
+@auth_required
+def set_online():
+    users_col.update_one({"_id": g.user["_id"]}, {"$set": {"last_seen": now()}})
+    return jsonify({"ok": True})
+
+
+# ================================================================ КОНТАКТЫ
 @app.get("/contacts")
 @auth_required
 def list_contacts():
@@ -307,13 +398,13 @@ def add_contact():
     try:
         contacts_col.insert_one({"owner_id": g.user["_id"], "contact_id": target["_id"], "created_at": now()})
     except DuplicateKeyError:
-        pass  # уже в контактах: просто откроем существующий чат
+        pass  # уже в контактах
 
     chat = get_or_create_private_chat(g.user["_id"], target["_id"])
     return jsonify({"contact": user_dto(target), "chat": chat_dto_by_id(chat["_id"], g.user)}), 201
 
 
-# ---------------------------------------------------------------- Группы
+# ================================================================ ГРУППЫ
 @app.post("/groups")
 @auth_required
 def create_group():
@@ -333,7 +424,6 @@ def create_group():
     if None in ids:
         return err("Некорректный список участников")
 
-    # добавлять можно только тех, кто есть в ваших контактах
     valid = {l["contact_id"] for l in contacts_col.find({"owner_id": g.user["_id"], "contact_id": {"$in": list(ids)}})}
     if valid != ids:
         return err("Некоторых участников нет в ваших контактах")
@@ -352,7 +442,7 @@ def create_group():
     return jsonify({"chat": chat_dto_by_id(res.inserted_id, g.user)}), 201
 
 
-# ---------------------------------------------------------------- Чаты и сообщения
+# ================================================================ ЧАТЫ И СООБЩЕНИЯ
 @app.get("/chats")
 @auth_required
 def list_chats():
@@ -386,12 +476,15 @@ def send_message(chat_id):
         return err("Чат не найден", 404)
 
     data = request.get_json(silent=True) or {}
-    text = as_str(data.get("text"))
+    text = as_str(data.get("text")) or ""
+    image = as_str(data.get("image"))
     client_id = as_str(data.get("client_id"))
+    reply_to = as_str(data.get("reply_to"))
+    reply_to_text = as_str(data.get("reply_to_text"))
 
-    text = text.strip() if text else ""
-    if not text:
-        return err("Введите сообщение")
+    text = text.strip()
+    if not text and not image:
+        return err("Введите сообщение или загрузите фото")
     if len(text) > MESSAGE_MAX:
         return err(f"Сообщение слишком длинное (максимум {MESSAGE_MAX} символов)")
     if not client_id or not (8 <= len(client_id) <= 64):
@@ -402,23 +495,27 @@ def send_message(chat_id):
         "chat_id": chat["_id"],
         "sender_id": me["_id"],
         "text": text,
+        "image": image,
+        "reply_to": reply_to,
+        "reply_to_text": reply_to_text,
         "client_id": client_id,
         "created_at": now(),
+        "read_by": [me["_id"]],
     }
     try:
         doc["_id"] = messages_col.insert_one(doc).inserted_id
     except DuplicateKeyError:
-        # то же сообщение уже сохранено (повторный клик / повтор запроса): возвращаем его, не создавая дубль
         existing = messages_col.find_one({"sender_id": me["_id"], "client_id": client_id})
         return jsonify({"message": message_dto(existing, {me["_id"]: me}), "duplicate": True})
 
+    last_text = text if text else "📷 Фото"
     chats_col.update_one(
         {"_id": chat["_id"]},
         {
             "$set": {
                 "updated_at": doc["created_at"],
                 f"read.{me['_id']}": str(doc["_id"]),
-                "last_message": {"text": text[:100], "sender": me["login"], "at": doc["created_at"]},
+                "last_message": {"text": last_text[:100], "sender": me["login"], "at": doc["created_at"]},
             }
         },
     )
@@ -440,12 +537,34 @@ def typing(chat_id):
     return jsonify({"ok": True})
 
 
+@app.post("/chats/<chat_id>/read")
+@auth_required
+def mark_read(chat_id):
+    chat = get_chat_for_user(chat_id)
+    if not chat:
+        return err("Чат не найден", 404)
+    
+    latest = messages_col.find_one({"chat_id": chat["_id"]}, sort=[("_id", DESCENDING)])
+    if latest:
+        messages_col.update_many(
+            {"chat_id": chat["_id"], "_id": {"$lte": latest["_id"]}, "read_by": {"$ne": g.user["_id"]}},
+            {"$addToSet": {"read_by": g.user["_id"]}},
+        )
+        chats_col.update_one({"_id": chat["_id"]}, {"$set": {f"read.{g.user['_id']}": str(latest["_id"])}})
+    
+    return jsonify({"ok": True})
+
+
+# ================================================================ POLLING
 @app.get("/poll")
 @auth_required
 def poll():
     """Один запрос вместо нескольких: список чатов + новые сообщения открытого чата."""
     me = g.user
     result = {"chat_id": None, "messages": []}
+
+    # Обновляем last_seen при каждом polling запросе
+    users_col.update_one({"_id": me["_id"]}, {"$set": {"last_seen": now()}})
 
     chat = get_chat_for_user(request.args.get("chat_id")) if request.args.get("chat_id") else None
     if chat:
@@ -461,7 +580,11 @@ def poll():
         # отмечаем прочитанным, только если вкладка открыта
         if request.args.get("read") == "1":
             latest = messages_col.find_one({"chat_id": chat["_id"]}, sort=[("_id", DESCENDING)])
-            if latest and chat.get("read", {}).get(str(me["_id"])) != str(latest["_id"]):
+            if latest:
+                messages_col.update_many(
+                    {"chat_id": chat["_id"], "_id": {"$lte": latest["_id"]}, "read_by": {"$ne": me["_id"]}},
+                    {"$addToSet": {"read_by": me["_id"]}},
+                )
                 chats_col.update_one({"_id": chat["_id"]}, {"$set": {f"read.{me['_id']}": str(latest["_id"])}})
 
     result["chats"] = chats_for_user(me)
@@ -470,4 +593,4 @@ def poll():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=False)
