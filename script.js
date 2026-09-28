@@ -1,5 +1,5 @@
 // URL вашего сервера на Render
-const API_URL = "https://mychat-backend.onrender.com";
+const API_URL = "https://mychat-backend-gnp6.onrender.com";
 
 const POLL_ACTIVE_MS = 1000;   // чат открыт и вкладка видна
 const POLL_IDLE_MS = 3000;     // иначе реже
