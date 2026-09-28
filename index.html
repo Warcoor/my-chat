@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        /* ========== ТЕМЫ ========== */
         :root {
             --bg: #e6ecf0;
             --panel: #ffffff;
@@ -22,6 +23,25 @@
             --badge: #f08a24;
             --danger: #c7372f;
             --radius: 14px;
+        }
+
+        body.dark {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --ink: #e8eaed;
+            --muted: #9ca3af;
+            --line: #333333;
+            --accent: #00d4ff;
+            --accent-dark: #00b8d4;
+            --accent-soft: #1a3d42;
+            --bubble-in: #2d2d2d;
+            --bubble-out: #00d4ff;
+            --badge: #ff6b35;
+            --danger: #ff6b6b;
+        }
+
+        body.auto {
+            color-scheme: light dark;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,15 +73,17 @@
         .btn:hover { background: var(--accent-dark); }
         .btn:disabled { opacity: .55; cursor: default; }
         .btn-ghost { background: var(--accent-soft); color: var(--accent-dark); }
-        .btn-ghost:hover { background: #cfeaec; }
+        .btn-ghost:hover { background: var(--accent-soft); opacity: .8; }
         .btn-wide { width: 100%; }
+        .btn-sm { padding: 6px 12px; font-size: 14px; }
+        .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
 
         .field {
             width: 100%;
             padding: 11px 13px;
             border: 1px solid var(--line);
             border-radius: 10px;
-            background: #fff;
+            background: var(--panel);
             margin-bottom: 10px;
         }
         .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -77,8 +99,29 @@
             display: grid; place-items: center;
             color: #fff; font-weight: 600; font-size: 18px;
             user-select: none;
+            position: relative;
         }
         .avatar.sm { width: 32px; height: 32px; font-size: 14px; }
+        .avatar.lg { width: 80px; height: 80px; font-size: 32px; }
+
+        .avatar-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--accent);
+        }
+
+        .online-indicator {
+            position: absolute;
+            bottom: 0; right: 0;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: #31a24c;
+            border: 2px solid var(--panel);
+        }
+
+        .online-indicator.offline { background: #9ca3af; }
 
         /* ---------- Вход ---------- */
         #auth {
@@ -115,23 +158,62 @@
             border-right: 1px solid var(--line);
             min-height: 0;
         }
-        .me-bar {
+
+        .top-bar {
             display: flex; align-items: center; gap: 10px;
             padding: 12px 14px;
             border-bottom: 1px solid var(--line);
         }
-        .me-bar .name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .link-btn { color: var(--muted); font-size: 13px; padding: 6px 8px; border-radius: 8px; }
-        .link-btn:hover { background: var(--bg); color: var(--ink); }
+
+        .me-card {
+            flex: 1; cursor: pointer; min-width: 0;
+        }
+
+        .me-name {
+            font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .me-status {
+            font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px; height: 6px; border-radius: 50%; background: #31a24c;
+        }
+        .status-dot.offline { background: #9ca3af; }
+
+        .sidebar-actions {
+            display: flex; gap: 6px;
+        }
+
+        .action-btn {
+            color: var(--muted); font-size: 18px; padding: 6px 8px; border-radius: 8px;
+        }
+        .action-btn:hover { background: var(--bg); color: var(--ink); }
+
         .add-wrap { padding: 12px 14px; }
+
+        .search-wrap {
+            padding: 8px 12px;
+        }
+
+        .search-field {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--bg);
+            font-size: 14px;
+        }
 
         #chat-list { flex: 1; overflow-y: auto; min-height: 0; }
         .chat-row {
             display: flex; gap: 12px; align-items: center;
             width: 100%; text-align: left;
             padding: 10px 14px;
+            cursor: pointer;
         }
-        .chat-row:hover { background: #f5f8fa; }
+        .chat-row:hover { background: var(--bg); }
         .chat-row.active { background: var(--accent-soft); }
         .chat-row .mid { flex: 1; min-width: 0; }
         .chat-row .top { display: flex; justify-content: space-between; gap: 8px; }
@@ -148,7 +230,7 @@
         .empty-list { padding: 28px 20px; color: var(--muted); text-align: center; line-height: 1.5; }
 
         /* ---------- Окно чата ---------- */
-        .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #eef2f5; }
+        .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
         .pane-empty { flex: 1; display: grid; place-items: center; color: var(--muted); padding: 20px; text-align: center; }
         .chat-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
@@ -168,10 +250,16 @@
             padding: 14px 14px 6px;
             display: flex; flex-direction: column; gap: 3px;
         }
-        .msg { display: flex; align-items: flex-end; gap: 8px; max-width: 78%; }
+
+        .msg {
+            display: flex; align-items: flex-end; gap: 8px; max-width: 78%;
+            position: relative;
+        }
+        .msg:hover .msg-actions { opacity: 1; }
         .msg.out { align-self: flex-end; flex-direction: row-reverse; }
         .msg.gap { margin-top: 9px; }
         .msg .avatar-slot { width: 32px; flex: none; }
+
         .bubble {
             background: var(--bubble-in);
             padding: 7px 11px 6px;
@@ -180,21 +268,47 @@
             box-shadow: 0 1px 1px rgba(22, 33, 43, .06);
             word-break: break-word; white-space: pre-wrap;
             min-width: 0;
+            position: relative;
         }
+
         .msg.out .bubble {
             background: var(--bubble-out); color: #fff;
             border-bottom-left-radius: var(--radius); border-bottom-right-radius: 4px;
         }
+
         .bubble .author { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 1px; }
         .bubble .time { float: right; margin: 6px 0 0 12px; font-size: 11px; opacity: .6; line-height: 1; }
+        .bubble .status-icon { margin-left: 4px; font-size: 10px; }
+        .bubble img.msg-image { max-width: 200px; border-radius: 8px; margin-bottom: 4px; display: block; }
+        .bubble .replied-to {
+            font-size: 12px; opacity: .7; padding: 6px; background: rgba(0,0,0,.1); border-left: 2px solid var(--accent);
+            margin-bottom: 4px; border-radius: 4px;
+        }
+
+        .msg-actions {
+            position: absolute; bottom: -30px; right: 0;
+            background: var(--panel); border: 1px solid var(--line);
+            border-radius: 8px; padding: 4px; display: flex; gap: 2px;
+            opacity: 0; transition: opacity .2s; z-index: 1;
+        }
+
+        .msg-actions button {
+            width: 28px; height: 28px; display: grid; place-items: center;
+            border-radius: 6px; font-size: 14px;
+        }
+        .msg-actions button:hover { background: var(--bg); }
+
         .no-msgs { margin: auto; color: var(--muted); }
         .msg.pending .bubble { opacity: .65; }
         .msg.failed .bubble { background: var(--danger); color: #fff; cursor: pointer; }
         .msg.failed .bubble .time { opacity: .9; }
 
-        .composer { display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); }
-        .composer .field { margin: 0; flex: 1; border-radius: 22px; padding: 11px 16px; }
+        .composer { display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); flex-wrap: wrap; }
+        .composer .field { margin: 0; flex: 1; min-width: 200px; border-radius: 22px; padding: 11px 16px; }
         .composer .btn { border-radius: 22px; padding: 0 20px; }
+        .emoji-picker { position: absolute; bottom: 100px; right: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-height: 300px; overflow-y: auto; }
+        .emoji-btn { width: 32px; height: 32px; font-size: 20px; cursor: pointer; border: none; border-radius: 6px; background: transparent; }
+        .emoji-btn:hover { background: var(--bg); }
 
         /* ---------- Модальное окно ---------- */
         .overlay {
@@ -209,6 +323,7 @@
         .modal .row-btn {
             display: block; width: 100%; text-align: left;
             padding: 14px; border-radius: 12px; background: var(--bg); margin-bottom: 10px;
+            cursor: pointer;
         }
         .modal .row-btn:hover { background: var(--accent-soft); }
         .modal .row-btn b { display: block; margin-bottom: 2px; }
@@ -221,13 +336,73 @@
             display: flex; align-items: center; gap: 10px;
             padding: 8px 10px; cursor: pointer;
         }
-        .pick:hover { background: #f5f8fa; }
+        .pick:hover { background: var(--bg); }
         .pick input { width: 18px; height: 18px; accent-color: var(--accent); }
         .member-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 
+        /* ---------- Боковое меню (Settings) ---------- */
+        .settings-menu {
+            position: fixed; left: 0; top: 0; width: 240px; height: 100%;
+            background: var(--panel); border-right: 1px solid var(--line);
+            transform: translateX(-100%); transition: transform .3s;
+            z-index: 20; overflow-y: auto;
+        }
+
+        .settings-menu.open { transform: translateX(0); }
+
+        .settings-close {
+            position: absolute; top: 12px; right: 12px;
+            width: 32px; height: 32px; display: grid; place-items: center;
+            font-size: 24px; border-radius: 8px;
+        }
+        .settings-close:hover { background: var(--bg); }
+
+        .settings-menu h4 {
+            padding: 16px 14px 8px; font-size: 13px; text-transform: uppercase;
+            color: var(--muted); font-weight: 600; margin-top: 8px;
+        }
+
+        .settings-menu .settings-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 14px; cursor: pointer;
+        }
+        .settings-menu .settings-item:hover { background: var(--bg); }
+
+        .settings-menu .settings-item input[type="radio"],
+        .settings-menu .settings-item input[type="checkbox"] {
+            cursor: pointer; accent-color: var(--accent);
+        }
+
+        .settings-menu label { flex: 1; cursor: pointer; }
+
+        .upload-avatar {
+            width: 100%;
+            margin-bottom: 16px;
+        }
+
+        .avatar-preview {
+            width: 80px; height: 80px;
+            border-radius: 50%; margin: 16px auto;
+            background: var(--accent-soft);
+            display: grid; place-items: center;
+            overflow: hidden;
+        }
+
+        .avatar-preview img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+
+        .profile-field {
+            margin-bottom: 14px;
+        }
+
+        .profile-field label {
+            display: block; font-weight: 500; margin-bottom: 4px; font-size: 14px;
+        }
+
         /* ---------- Мобильная версия ---------- */
         @media (max-width: 760px) {
-            /* Экран не прокручивается целиком: шапка чата всегда на месте, скроллится только лента сообщений */
             html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; }
             #app, #auth { height: var(--app-h, 100%); }
             #auth { overflow-y: auto; }
@@ -239,6 +414,7 @@
             #app.chat-open .pane { display: flex; }
             .back-btn { display: block; }
             .msg { max-width: 88%; }
+            .msg-actions { display: none; }
         }
 
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -246,15 +422,74 @@
 </head>
 <body>
 
+<!-- Боковое меню настроек -->
+<div class="settings-menu" id="settings-menu">
+    <button class="settings-close" id="btn-close-settings">✕</button>
+    
+    <h4>Профиль</h4>
+    <div style="padding: 0 14px 16px;">
+        <div class="avatar-preview">
+            <img id="profile-avatar-preview" style="display: none;">
+            <span id="profile-avatar-default"></span>
+        </div>
+        <label class="btn btn-ghost btn-wide" style="text-align: center; display: block; cursor: pointer; margin-bottom: 8px;">
+            Загрузить аватарку
+            <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+        </label>
+        <div class="profile-field">
+            <label>Имя</label>
+            <input class="field" type="text" id="profile-name" placeholder="Ваше имя">
+        </div>
+        <div class="profile-field">
+            <label>Описание</label>
+            <input class="field" type="text" id="profile-bio" placeholder="О себе..." maxlength="100">
+        </div>
+        <button class="btn btn-wide btn-sm" id="btn-save-profile">Сохранить</button>
+    </div>
+
+    <h4>Тема</h4>
+    <div class="settings-item">
+        <input type="radio" name="theme" value="light" id="theme-light">
+        <label for="theme-light">☀️ Светлая</label>
+    </div>
+    <div class="settings-item">
+        <input type="radio" name="theme" value="dark" id="theme-dark">
+        <label for="theme-dark">🌙 Темная</label>
+    </div>
+    <div class="settings-item">
+        <input type="radio" name="theme" value="auto" id="theme-auto">
+        <label for="theme-auto">🖥️ Система</label>
+    </div>
+
+    <h4>Язык</h4>
+    <div class="settings-item">
+        <input type="radio" name="language" value="ru" id="lang-ru">
+        <label for="lang-ru">🇷🇺 Русский</label>
+    </div>
+    <div class="settings-item">
+        <input type="radio" name="language" value="en" id="lang-en">
+        <label for="lang-en">🇬🇧 English</label>
+    </div>
+    <div class="settings-item">
+        <input type="radio" name="language" value="ua" id="lang-ua">
+        <label for="lang-ua">🇺🇦 Українська</label>
+    </div>
+
+    <h4>Другое</h4>
+    <button class="settings-item" id="btn-logout-settings" style="width: calc(100% - 28px); margin: 0 14px;">
+        ⌛ Выйти
+    </button>
+</div>
+
 <!-- Вход -->
 <div id="auth">
     <div class="auth-card">
         <h1>MyChat</h1>
-        <p class="sub">Войдите или создайте аккаунт</p>
+        <p class="sub" id="auth-subtitle">Войдите или создайте аккаунт</p>
         <div id="auth-error" class="error"></div>
         <input class="field" type="text" id="auth-login" placeholder="Логин" autocomplete="username" maxlength="20">
         <input class="field" type="password" id="auth-pas" placeholder="Пароль" autocomplete="current-password" maxlength="64">
-        <p class="hint">Логин: 3–20 символов, латиница, цифры и «_». Пароль: от 6 символов, минимум одна буква и одна цифра.</p>
+        <p class="hint" id="auth-hint">Логин: 3–20 символов, латиница, цифры и «_». Пароль: от 6 символов, минимум одна буква и одна цифра</p>
         <button class="btn btn-wide" id="btn-login">Войти</button>
         <button class="btn btn-ghost btn-wide" id="btn-register">Зарегистрироваться</button>
     </div>
@@ -263,13 +498,24 @@
 <!-- Приложение -->
 <div id="app" class="hidden">
     <aside class="sidebar">
-        <div class="me-bar">
-            <div class="avatar sm" id="me-avatar"></div>
-            <div class="name" id="me-name"></div>
-            <button class="link-btn" id="btn-logout">Выйти</button>
+        <div class="top-bar">
+            <button class="avatar sm" id="me-avatar-btn"></button>
+            <div class="me-card" id="me-card">
+                <div class="me-name" id="me-name"></div>
+                <div class="me-status">
+                    <span class="status-dot" id="me-status-dot"></span>
+                    <span id="me-status-text"></span>
+                </div>
+            </div>
+            <div class="sidebar-actions">
+                <button class="action-btn" id="btn-settings" title="Настройки">⚙️</button>
+            </div>
+        </div>
+        <div class="search-wrap">
+            <input class="search-field" type="text" id="chat-search" placeholder="Поиск...">
         </div>
         <div class="add-wrap">
-            <button class="btn btn-wide" id="btn-add-chat">Добавить чат</button>
+            <button class="btn btn-wide btn-sm" id="btn-add-chat">+ Чат</button>
         </div>
         <div id="chat-list"></div>
     </aside>
@@ -279,8 +525,8 @@
         <div class="chat-view hidden" id="chat-view">
             <div class="chat-head">
                 <button class="back-btn" id="btn-back" aria-label="Назад к списку чатов">‹</button>
-                <div class="avatar" id="head-avatar"></div>
-                <button class="info" id="head-info">
+                <div class="avatar sm" id="head-avatar"></div>
+                <button class="info" id="head-info" style="flex: 1; min-width: 0; text-align: left; background: none; border: none; cursor: pointer;">
                     <div class="title" id="head-title"></div>
                     <div class="status" id="head-status"></div>
                 </button>
@@ -288,7 +534,10 @@
             <div id="messages"></div>
             <div class="composer">
                 <input class="field" type="text" id="message-text" placeholder="Сообщение" maxlength="2000" autocomplete="off">
+                <button class="btn btn-sm" id="btn-emoji" title="Эмодзи">😊</button>
+                <button class="btn btn-sm" id="btn-photo" title="Фото">📷</button>
                 <button class="btn" id="btn-send">Отправить</button>
+                <input type="file" id="photo-upload" accept="image/*" style="display: none;">
             </div>
         </div>
     </section>
