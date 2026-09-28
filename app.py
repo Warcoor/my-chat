@@ -35,7 +35,7 @@ MESSAGE_MAX = 2000
 GROUP_NAME_MAX = 40
 GROUP_MEMBERS_MAX = 50
 SESSION_DAYS = 30
-TYPING_TTL_SECONDS = 5
+TYPING_TTL_SECONDS = 3
 
 
 def init_db():
@@ -146,6 +146,7 @@ def message_dto(m, umap):
         "sender": sender["login"] if sender else "Удалённый пользователь",
         "text": m["text"],
         "created_at": m["created_at"].isoformat(),
+        "client_id": m.get("client_id"),
     }
 
 
