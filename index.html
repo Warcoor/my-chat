@@ -48,12 +48,17 @@ textarea.field{resize:vertical;min-height:70px}
 .error{color:var(--danger);font-size:13px;min-height:18px;margin-bottom:8px}
 .hint{color:var(--muted);font-size:12.5px;line-height:1.4;margin-bottom:12px}
 
-.avatar{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;font-size:18px;user-select:none;overflow:hidden;position:relative}
-.avatar.sm{width:32px;height:32px;font-size:14px}
-.avatar.lg{width:88px;height:88px;font-size:32px}
-.avatar img{width:100%;height:100%;object-fit:cover}
-.avatar .dot{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:var(--online);border:2px solid var(--panel)}
-.avatar.sm .dot{width:9px;height:9px;border:2px solid var(--panel)}
+.avatar{flex:none;width:44px;height:44px;position:relative;user-select:none}
+.avatar.sm{width:32px;height:32px}
+.avatar.lg{width:88px;height:88px}
+.avatar-img{width:100%;height:100%;border-radius:50%;overflow:hidden;display:grid;place-items:center;color:#fff;font-weight:600;font-size:18px}
+.avatar.sm .avatar-img{font-size:14px}
+.avatar.lg .avatar-img{font-size:32px}
+.avatar-img img{width:100%;height:100%;object-fit:cover}
+/* Точка "в сети": не внутри аватарки (иначе её обрежет overflow:hidden), а поверх — полноценный круг, выступающий за край */
+.avatar .dot{position:absolute;right:-2px;bottom:-2px;width:15px;height:15px;border-radius:50%;background:var(--online);border:3px solid var(--panel);box-shadow:0 0 0 1px rgba(0,0,0,.12);z-index:1}
+.avatar.sm .dot{width:11px;height:11px;border-width:2.5px;right:-1px;bottom:-1px}
+.avatar.lg .dot{width:20px;height:20px;border-width:3.5px}
 
 /* ---------- Вход ---------- */
 #auth{height:100%;display:grid;place-items:center;padding:16px}
@@ -181,10 +186,11 @@ textarea.field{resize:vertical;min-height:70px}
   #app,#auth{height:var(--app-h,100%)}
   #auth{overflow-y:auto}
   #app{flex-direction:row}
-  .nav{width:64px;order:0}
+  .nav{width:64px;flex:0 0 64px;order:0}
   .nav-btn span{display:none}
-  .sidebar{width:100%;border-right:none}
-  .pane{display:none}
+  /* flex:1 вместо width:100% — иначе сайдбар считал 100% от ширины экрана ПОВЕРХ панели навигации и вылезал за край */
+  .sidebar{width:auto;flex:1 1 auto;min-width:0;border-right:none}
+  .pane{display:none;min-width:0}
   #app.chat-open .sidebar{display:none}
   #app.chat-open .nav{display:none}
   #app.chat-open .pane{display:flex}
