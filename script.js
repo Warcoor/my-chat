@@ -39,19 +39,22 @@ const I18N = {
     "contacts.empty": "В контактах пока никого. Нажмите «Добавить контакт».",
     "contacts.online": "в сети",
     "add.title": "Добавить чат",
-    "add.contact": "Добавить контакт",
-    "add.contactDesc": "Найти человека по логину и начать чат",
+    "add.startChat": "Добавить чат",
+    "add.startChatDesc": "По логину или из ваших контактов",
     "add.group": "Создать группу",
     "add.groupDesc": "Выбрать людей из ваших контактов",
     "add.cancel": "Отмена",
     "add.back": "Назад",
     "add.loginPlaceholder": "Логин человека",
     "add.submit": "Добавить",
+    "add.startChatTitle": "Новый чат",
+    "add.orFromContacts": "Или выберите из контактов",
     "add.groupTitle": "Новая группа",
     "add.groupNamePlaceholder": "Название группы",
     "add.membersHint": "Участники из ваших контактов:",
     "add.create": "Создать",
     "add.noContacts": "В контактах пока никого. Сначала добавьте людей через «Добавить контакт».",
+    "add.contactTitle": "Добавить контакт",
     "err.enterLogin": "Введите логин",
     "err.enterGroupName": "Введите название группы",
     "err.selectMember": "Выберите хотя бы одного участника",
@@ -113,19 +116,22 @@ const I18N = {
     "contacts.empty": "No contacts yet. Tap \"Add contact\".",
     "contacts.online": "online",
     "add.title": "Add chat",
-    "add.contact": "Add contact",
-    "add.contactDesc": "Find someone by username and start chatting",
+    "add.startChat": "Add chat",
+    "add.startChatDesc": "By username or from your contacts",
     "add.group": "Create group",
     "add.groupDesc": "Pick people from your contacts",
     "add.cancel": "Cancel",
     "add.back": "Back",
     "add.loginPlaceholder": "Person's username",
     "add.submit": "Add",
+    "add.startChatTitle": "New chat",
+    "add.orFromContacts": "Or pick from your contacts",
     "add.groupTitle": "New group",
     "add.groupNamePlaceholder": "Group name",
     "add.membersHint": "Members from your contacts:",
     "add.create": "Create",
     "add.noContacts": "No contacts yet. Add people first via \"Add contact\".",
+    "add.contactTitle": "Add contact",
     "err.enterLogin": "Enter a username",
     "err.enterGroupName": "Enter a group name",
     "err.selectMember": "Select at least one member",
@@ -187,19 +193,22 @@ const I18N = {
     "contacts.empty": "У контактах поки нікого. Натисніть «Додати контакт».",
     "contacts.online": "у мережі",
     "add.title": "Додати чат",
-    "add.contact": "Додати контакт",
-    "add.contactDesc": "Знайти людину за логіном і почати чат",
+    "add.startChat": "Додати чат",
+    "add.startChatDesc": "За логіном або з ваших контактів",
     "add.group": "Створити групу",
     "add.groupDesc": "Обрати людей із ваших контактів",
     "add.cancel": "Скасувати",
     "add.back": "Назад",
     "add.loginPlaceholder": "Логін людини",
     "add.submit": "Додати",
+    "add.startChatTitle": "Новий чат",
+    "add.orFromContacts": "Або оберіть із контактів",
     "add.groupTitle": "Нова група",
     "add.groupNamePlaceholder": "Назва групи",
     "add.membersHint": "Учасники з ваших контактів:",
     "add.create": "Створити",
     "add.noContacts": "У контактах поки нікого. Спочатку додайте людей через «Додати контакт».",
+    "add.contactTitle": "Додати контакт",
     "err.enterLogin": "Введіть логін",
     "err.enterGroupName": "Введіть назву групи",
     "err.selectMember": "Оберіть хоча б одного учасника",
@@ -339,19 +348,21 @@ function avatarColor(name) {
 
 function fillAvatar(node, user, small = false) {
   node.classList.toggle("sm", small);
-  node.querySelectorAll("img,.dot").forEach((n) => n.remove());
+  node.replaceChildren();
   const name = typeof user === "string" ? user : user.name || user.login || "?";
+  const inner = el("div", "avatar-img");
   if (user && typeof user === "object" && user.avatar) {
-    node.textContent = "";
     const img = el("img");
     img.src = API_URL + user.avatar;
     img.alt = "";
-    node.appendChild(img);
-    node.style.background = "transparent";
+    inner.appendChild(img);
   } else {
-    node.textContent = (name[0] || "?").toUpperCase();
-    node.style.background = avatarColor(name);
+    inner.textContent = (name[0] || "?").toUpperCase();
+    inner.style.background = avatarColor(name);
   }
+  node.appendChild(inner);
+  // Точка статуса — отдельный элемент поверх .avatar, а не внутри .avatar-img,
+  // иначе overflow:hidden у круглой обёртки срезает её до полукруга.
   if (user && typeof user === "object" && user.online) node.appendChild(el("div", "dot"));
 }
 
@@ -596,14 +607,27 @@ async function loadContacts() {
     mid.appendChild(el("div", "name", u.name));
     mid.appendChild(el("div", "status" + (u.online ? " online" : ""), formatLastSeen(u)));
     row.appendChild(mid);
-    row.addEventListener("click", async () => {
-      const data = await api("/contacts", { method: "POST", body: { login: u.login } });
-      if (!chats.some((c) => c.id === data.chat.id)) chats = [data.chat, ...chats];
-      showSection("chats");
-      openChat(data.chat.id);
-    });
+    row.addEventListener("click", () => openChatWithContact(u));
     list.appendChild(row);
   }
+}
+
+// Раньше клик по контакту всегда шёл на сервер (POST /contacts), даже если чат уже существовал —
+// это и была заметная задержка. Чат с контактом создаётся сразу при его добавлении,
+// поэтому сначала ищем его локально и открываем мгновенно; на сервер идём только если не нашли.
+function findPrivateChat(contactId) {
+  return chats.find((c) => c.type === "private" && c.peer && c.peer.id === contactId) || null;
+}
+
+async function openChatWithContact(u) {
+  showSection("chats");
+  const local = findPrivateChat(u.id);
+  if (local) { openChat(local.id); return; }
+  try {
+    const data = await api("/contacts", { method: "POST", body: { login: u.login } });
+    if (!chats.some((c) => c.id === data.chat.id)) chats = [data.chat, ...chats];
+    openChat(data.chat.id);
+  } catch (e) { console.error(e.message); }
 }
 
 // ------------------------------------------------------------ Окно чата
@@ -796,12 +820,13 @@ function openModal(build) {
   return modal;
 }
 
+// Кнопка «Добавить чат» (раздел «Чаты»): выбор между новым чатом (по логину или из контактов) и группой.
 function showAddChooser() {
   openModal((modal) => {
     modal.appendChild(el("h3", "", t("add.title")));
     const a = el("button", "row-btn");
-    a.append(el("b", "", t("add.contact")), el("span", "", t("add.contactDesc")));
-    a.addEventListener("click", showAddContact);
+    a.append(el("b", "", t("add.startChat")), el("span", "", t("add.startChatDesc")));
+    a.addEventListener("click", showStartChat);
     const b = el("button", "row-btn");
     b.append(el("b", "", t("add.group")), el("span", "", t("add.groupDesc")));
     b.addEventListener("click", showCreateGroup);
@@ -811,21 +836,23 @@ function showAddChooser() {
   });
 }
 
-function showAddContact() {
-  openModal((modal) => {
-    modal.appendChild(el("h3", "", t("add.contact")));
+// Новый чат: логин (с автодобавлением в контакты) + список уже существующих контактов ниже.
+function showStartChat() {
+  openModal(async (modal) => {
+    modal.appendChild(el("h3", "", t("add.startChatTitle")));
     const error = el("div", "error");
     const input = el("input", "field");
     input.placeholder = t("add.loginPlaceholder");
     input.maxLength = 20;
     input.autocomplete = "off";
+
     const actions = el("div", "actions");
     const back = el("button", "btn btn-ghost", t("add.back"));
     const add = el("button", "btn", t("add.submit"));
     actions.append(back, add);
     modal.append(input, error, actions);
-    input.focus();
     back.addEventListener("click", showAddChooser);
+
     const submit = async () => {
       error.textContent = "";
       const login = input.value.trim();
@@ -835,6 +862,63 @@ function showAddContact() {
         const data = await api("/contacts", { method: "POST", body: { login } });
         if (!chats.some((c) => c.id === data.chat.id)) chats = [data.chat, ...chats];
         openChat(data.chat.id);
+      } catch (e) { error.textContent = e.message; add.disabled = false; }
+    };
+    add.addEventListener("click", submit);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    input.focus();
+
+    modal.appendChild(el("p", "hint", t("add.orFromContacts")));
+    const box = el("div", "pick-list");
+    box.appendChild(el("div", "empty-list", "…"));
+    modal.appendChild(box);
+
+    let cts = [];
+    try { cts = (await api("/contacts")).contacts; } catch (e) { /* тихо: поле логина всё равно работает */ }
+    box.replaceChildren();
+    if (!cts.length) {
+      box.appendChild(el("div", "empty-list", t("add.noContacts")));
+    } else {
+      for (const u of cts) {
+        const row = el("button", "contact-row");
+        row.appendChild(makeAvatar(u, true));
+        const mid = el("div", "mid");
+        mid.appendChild(el("div", "name", u.name));
+        row.appendChild(mid);
+        row.addEventListener("click", () => openChatWithContact(u));
+        box.appendChild(row);
+      }
+    }
+  });
+}
+
+// Кнопка «Добавить контакт» (раздел «Контакты»): сразу форма логина, без выбора чат/группа.
+function showAddContact() {
+  openModal((modal) => {
+    modal.appendChild(el("h3", "", t("add.contactTitle")));
+    const error = el("div", "error");
+    const input = el("input", "field");
+    input.placeholder = t("add.loginPlaceholder");
+    input.maxLength = 20;
+    input.autocomplete = "off";
+    const actions = el("div", "actions");
+    const cancel = el("button", "btn btn-ghost", t("add.cancel"));
+    const add = el("button", "btn", t("add.submit"));
+    actions.append(cancel, add);
+    modal.append(input, error, actions);
+    input.focus();
+    cancel.addEventListener("click", closeModal);
+    const submit = async () => {
+      error.textContent = "";
+      const login = input.value.trim();
+      if (!login) { error.textContent = t("err.enterLogin"); return; }
+      add.disabled = true;
+      try {
+        const data = await api("/contacts", { method: "POST", body: { login } });
+        if (!contacts.some((c) => c.id === data.contact.id)) contacts = [data.contact, ...contacts];
+        if (!chats.some((c) => c.id === data.chat.id)) chats = [data.chat, ...chats];
+        closeModal();
+        loadContacts();
       } catch (e) { error.textContent = e.message; add.disabled = false; }
     };
     add.addEventListener("click", submit);
@@ -1097,7 +1181,7 @@ $("btn-login").addEventListener("click", onLoginClick);
 $("btn-register").addEventListener("click", onRegisterClick);
 $("auth-pas").addEventListener("keydown", (e) => { if (e.key === "Enter") onLoginClick(); });
 $("btn-add-chat").addEventListener("click", showAddChooser);
-$("btn-add-contact-2").addEventListener("click", showAddChooser);
+$("btn-add-contact-2").addEventListener("click", showAddContact);
 $("btn-back").addEventListener("click", closeChat);
 $("head-info").addEventListener("click", showChatInfo);
 $("btn-send").addEventListener("click", sendMessage);
