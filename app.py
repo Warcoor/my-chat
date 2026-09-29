@@ -109,8 +109,20 @@ def init_db():
     idx(typing_col, [("at", ASCENDING)], expireAfterSeconds=30)
     idx(images_col, [("chat_id", ASCENDING)])
 
-
-init_db()
+    # Миграция: чаты, оставшиеся от более старой версии схемы, хранят last_message
+    # в другом формате (без "id"/"sender_id") — пересчитываем его в новом формате.
+    broken = chats_col.find(
+        {
+            "last_message": {"$exists": True},
+            "$or": [{"last_message.id": {"$exists": False}}, {"last_message.sender_id": {"$exists": False}}],
+        },
+        {"_id": 1},
+    )
+    for c in broken:
+        try:
+            refresh_last_message(c["_id"])
+        except Exception as e:
+            print("last_message migration warning:", e)
 
 
 # ---------------------------------------------------------------- Хелперы
@@ -397,7 +409,8 @@ def chats_for_user(me):
     # Всё, что пришло к нам в список чатов, считается доставленным
     for c in chats:
         lm = c.get("last_message")
-        if lm and lm.get("sender_id") != str(uid) and c.get("delivered", {}).get(str(uid)) != lm["id"]:
+        if lm and lm.get("id") and lm.get("sender_id") and lm.get("sender_id") != str(uid) \
+                and c.get("delivered", {}).get(str(uid)) != lm["id"]:
             mark_delivered(c["_id"], uid, ObjectId(lm["id"]))
             chats_col.update_one({"_id": c["_id"]}, {"$set": {f"delivered.{uid}": lm["id"]}})
 
@@ -427,6 +440,8 @@ def chats_for_user(me):
         unread = messages_col.count_documents(q, limit=100)
 
         lm = c.get("last_message")
+        if lm and not ("text" in lm and "sender" in lm and "at" in lm):
+            lm = None  # неполные/устаревшие данные — лучше не показывать, чем упасть
         result.append(
             {
                 "id": str(c["_id"]),
@@ -962,6 +977,9 @@ def poll():
 
     result["chats"] = chats_for_user(me)
     return jsonify(result)
+
+
+init_db()
 
 
 if __name__ == "__main__":
