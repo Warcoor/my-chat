@@ -159,8 +159,10 @@ textarea.field{resize:vertical;min-height:70px}
 .profile-head{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:18px}
 .avatar-edit{position:relative;width:88px;height:88px}
 .avatar-edit .avatar{width:100%;height:100%}
-.avatar-edit .edit-badge{position:absolute;right:-2px;bottom:-2px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25)}
-.avatar-edit .edit-badge svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:2}
+/* Раньше кнопка редактирования и точка "в сети" сидели в одном углу (bottom-right) и сливались.
+   Кнопку переносим в верхний правый угол — так она не пересекается с индикатором статуса. */
+.avatar-edit .edit-badge{position:absolute;right:-6px;top:-6px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid var(--panel)}
+.avatar-edit .edit-badge svg{width:14px;height:14px;stroke:#fff;fill:none;stroke-width:2}
 .field-label{font-size:12.5px;color:var(--muted);margin:0 2px 6px}
 .char-count{text-align:right;font-size:11.5px;color:var(--muted);margin-top:-6px;margin-bottom:10px}
 
@@ -200,6 +202,105 @@ textarea.field{resize:vertical;min-height:70px}
   .msg{max-width:88%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+
+/* ---------- Скроллбары, реагирующие на тему ---------- */
+#messages,#chat-list,#contact-list,.modal,.pick-list{scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
+#messages::-webkit-scrollbar,#chat-list::-webkit-scrollbar,#contact-list::-webkit-scrollbar,.modal::-webkit-scrollbar,.pick-list::-webkit-scrollbar{width:8px;height:8px}
+#messages::-webkit-scrollbar-track,#chat-list::-webkit-scrollbar-track,#contact-list::-webkit-scrollbar-track,.modal::-webkit-scrollbar-track,.pick-list::-webkit-scrollbar-track{background:transparent}
+#messages::-webkit-scrollbar-thumb,#chat-list::-webkit-scrollbar-thumb,#contact-list::-webkit-scrollbar-thumb,.modal::-webkit-scrollbar-thumb,.pick-list::-webkit-scrollbar-thumb{background:var(--muted);border-radius:4px}
+
+/* ---------- Закреплённое сообщение ---------- */
+.pinned-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);cursor:pointer}
+.pinned-bar svg{width:16px;height:16px;stroke:var(--accent);fill:none;stroke-width:2;flex:none}
+.pinned-bar .mid{flex:1;min-width:0}
+.pinned-bar .label{font-size:11px;color:var(--accent);font-weight:600}
+.pinned-bar .text{font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pinned-bar .unpin{flex:none;color:var(--muted);font-size:18px;padding:2px 6px}
+.pinned-bar .unpin:hover{color:var(--danger)}
+
+/* ---------- Ответ (реплай) ---------- */
+.reply-quote{display:flex;gap:7px;margin-bottom:3px;padding:3px 8px;border-left:3px solid var(--accent);border-radius:4px;background:rgba(127,127,127,.08);cursor:pointer}
+.msg.out .reply-quote{border-left-color:rgba(255,255,255,.8)}
+.reply-quote .rq-body{min-width:0;overflow:hidden}
+.reply-quote .rq-sender{font-size:12px;font-weight:600;color:var(--accent);display:block}
+.msg.out .reply-quote .rq-sender{color:rgba(255,255,255,.9)}
+.reply-quote .rq-text{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.msg.out .reply-quote .rq-text{color:rgba(255,255,255,.75)}
+
+.reply-bar{display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--panel-2);border-top:1px solid var(--line)}
+.reply-bar.active{display:flex}
+.reply-bar svg{width:18px;height:18px;stroke:var(--accent);fill:none;stroke-width:2;flex:none}
+.reply-bar .mid{flex:1;min-width:0}
+.reply-bar .label{font-size:11px;color:var(--accent);font-weight:600}
+.reply-bar .text{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reply-bar .rb-close{flex:none;color:var(--muted);font-size:20px;padding:2px 8px}
+
+/* ---------- Вложение перед отправкой ---------- */
+.attach-bar{display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--panel-2);border-top:1px solid var(--line)}
+.attach-bar.active{display:flex}
+.attach-bar img{width:52px;height:52px;object-fit:cover;border-radius:8px;flex:none}
+.attach-bar .mid{flex:1;font-size:13px;color:var(--muted)}
+.attach-bar .rb-close{flex:none;color:var(--muted);font-size:20px;padding:2px 8px}
+
+/* ---------- Изображение в сообщении ---------- */
+.bubble .msg-image{display:block;max-width:260px;max-height:320px;border-radius:10px;margin-bottom:4px;cursor:pointer;object-fit:cover}
+.bubble .msg-image.uploading{opacity:.6}
+
+/* ---------- Реакции ---------- */
+.reactions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.reaction-chip{display:flex;align-items:center;gap:4px;padding:2px 7px;border-radius:11px;background:rgba(127,127,127,.14);font-size:12.5px;line-height:1.6;border:1px solid transparent}
+.msg.out .reaction-chip{background:rgba(255,255,255,.18)}
+.reaction-chip.mine{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.msg.out .reaction-chip.mine{border-color:rgba(255,255,255,.85);background:rgba(255,255,255,.25);color:#fff}
+
+/* ---------- Статус сообщения (галочки) ---------- */
+.ticks{display:inline-flex;vertical-align:middle;margin-left:3px}
+.ticks svg{width:15px;height:10px;stroke:currentColor;fill:none;stroke-width:2}
+.ticks.read{color:#5ad0ff}
+.msg.out .bubble .time{cursor:default}
+.msg.out .bubble .time.clickable{cursor:pointer}
+
+/* ---------- Редактирование сообщения ---------- */
+.edit-box{display:flex;flex-direction:column;gap:6px}
+.edit-box textarea{width:100%;min-width:180px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--panel);color:var(--ink);resize:none}
+.edit-box .edit-actions{display:flex;gap:6px;justify-content:flex-end}
+.edit-box .edit-actions button{font-size:12px;padding:4px 10px;border-radius:7px}
+.edit-box .edit-save{background:var(--accent);color:#fff}
+.edit-box .edit-cancel{background:rgba(127,127,127,.18)}
+.bubble .edited-flag{font-size:10.5px;opacity:.65;margin-left:4px}
+.bubble.deleted{font-style:italic;opacity:.65}
+
+/* ---------- Контекстное меню сообщения ---------- */
+.msg-menu-backdrop{position:fixed;inset:0;z-index:20}
+.msg-menu{position:fixed;z-index:21;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:190px;max-width:240px}
+.msg-menu .reaction-row{display:flex;gap:2px;padding:4px 2px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.msg-menu .reaction-row button{font-size:19px;padding:4px;border-radius:8px;flex:1;text-align:center}
+.msg-menu .reaction-row button:hover{background:var(--panel-2)}
+.msg-menu .menu-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 10px;border-radius:8px;font-size:14px}
+.msg-menu .menu-item:hover{background:var(--panel-2)}
+.msg-menu .menu-item.danger{color:var(--danger)}
+.msg-menu .menu-item svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none}
+
+/* ---------- Composer: эмодзи и вложение ---------- */
+.composer{position:relative}
+.composer .icon-btn{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.composer .icon-btn:hover{background:var(--panel-2);color:var(--ink)}
+.composer .icon-btn svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8}
+
+.emoji-panel{display:none;position:absolute;bottom:100%;left:8px;margin-bottom:8px;background:var(--panel);border-radius:14px;box-shadow:var(--shadow);padding:8px;width:270px;max-height:210px;overflow-y:auto;grid-template-columns:repeat(7,1fr);gap:2px;z-index:5}
+.emoji-panel.active{display:grid}
+.emoji-panel button{font-size:20px;padding:6px 0;border-radius:8px;text-align:center}
+.emoji-panel button:hover{background:var(--panel-2)}
+
+/* ---------- Лайтбокс для фото ---------- */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:grid;place-items:center;z-index:30;padding:24px}
+.lightbox img{max-width:100%;max-height:100%;border-radius:6px}
+
+/* ---------- Список получения/прочтения (receipts) ---------- */
+.receipt-row{display:flex;align-items:center;gap:10px;padding:8px 0}
+.receipt-row .mid{flex:1;min-width:0}
+.receipt-row .status-line{font-size:12px;color:var(--muted)}
+.receipt-row .status-line.read{color:var(--online)}
 </style>
 </head>
 <body>
@@ -263,8 +364,39 @@ textarea.field{resize:vertical;min-height:70px}
           <div class="status" id="head-status"></div>
         </button>
       </div>
+      <div class="pinned-bar hidden" id="pinned-bar">
+        <svg viewBox="0 0 24 24"><path d="M12 2l1.5 5.5L19 9l-4.5 3L16 18l-4-3-4 3 1.5-6L5 9l5.5-1.5z"/></svg>
+        <div class="mid">
+          <div class="label" data-i18n="pin.label">Закреплено</div>
+          <div class="text" id="pinned-text"></div>
+        </div>
+        <button class="unpin" id="btn-unpin" aria-label="Открепить" title="Открепить">×</button>
+      </div>
       <div id="messages"></div>
+
+      <div class="reply-bar" id="reply-bar">
+        <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h9a6 6 0 016 6v3"/></svg>
+        <div class="mid">
+          <div class="label" id="reply-sender"></div>
+          <div class="text" id="reply-text"></div>
+        </div>
+        <button class="rb-close" id="btn-cancel-reply" aria-label="Отмена">×</button>
+      </div>
+      <div class="attach-bar" id="attach-bar">
+        <img id="attach-preview" alt="">
+        <div class="mid" data-i18n="attach.ready">Фото готово к отправке</div>
+        <button class="rb-close" id="btn-cancel-attach" aria-label="Отмена">×</button>
+      </div>
+
       <div class="composer">
+        <div class="emoji-panel" id="emoji-panel"></div>
+        <button class="icon-btn" id="btn-emoji" type="button" aria-label="Эмодзи" title="Эмодзи">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-attach" type="button" aria-label="Прикрепить фото" title="Прикрепить фото">
+          <svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8-8"/></svg>
+        </button>
+        <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" class="hidden">
         <input class="field" type="text" id="message-text" data-i18n-placeholder="chats.message" placeholder="Сообщение" maxlength="2000" autocomplete="off">
         <button class="btn" id="btn-send" data-i18n="chats.send">Отправить</button>
       </div>
