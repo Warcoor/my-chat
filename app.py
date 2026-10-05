@@ -33,6 +33,7 @@ messages_col = db["chat_messages"]
 typing_col = db["typing"]
 avatars_col = db["avatars"]
 images_col = db["images"]
+group_avatars_col = db["group_avatars"]
 
 # ---------------------------------------------------------------- Ограничения
 LOGIN_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
@@ -432,6 +433,7 @@ def chats_for_user(me):
             title = peer["name"] if peer else "?"
         else:
             title = c.get("name", "Group")
+        admins = {str(a) for a in c.get("admins", [])}
 
         q = {"chat_id": c["_id"], "sender_id": {"$ne": uid}, "deleted": {"$ne": True}}
         last_read = as_oid(c.get("read", {}).get(str(uid)))
@@ -450,6 +452,8 @@ def chats_for_user(me):
                 "peer": peer,
                 "members": members,
                 "owner_id": str(c["owner_id"]) if c.get("owner_id") else None,
+                "admins": list(admins) if c["type"] == "group" else None,
+                "avatar": f"/group-avatar/{c['_id']}?v={c['avatar_v']}" if c.get("avatar_v") else None,
                 "unread": unread,
                 "typing": typing_by_chat.get(c["_id"], []),
                 "last_message": (
@@ -668,6 +672,143 @@ def create_group():
         }
     )
     return jsonify({"chat": chat_dto_by_id(res.inserted_id, g.user)}), 201
+
+
+def get_group_for_user(chat_id_str):
+    cid = as_oid(chat_id_str)
+    if not cid:
+        return None
+    return chats_col.find_one({"_id": cid, "type": "group", "members": g.user["_id"]})
+
+
+def is_group_manager(chat, uid):
+    return chat.get("owner_id") == uid or uid in chat.get("admins", [])
+
+
+@app.post("/groups/<chat_id>/update")
+@auth_required
+def update_group(chat_id):
+    chat = get_group_for_user(chat_id)
+    if not chat:
+        return err("chat_not_found", 404)
+    if not is_group_manager(chat, g.user["_id"]):
+        return err("forbidden", 403)
+
+    data = request.get_json(silent=True) or {}
+    fields = {}
+
+    if "name" in data:
+        name = (as_str(data.get("name")) or "").strip()
+        if not name or len(name) > GROUP_NAME_MAX:
+            return err("group_name", max=GROUP_NAME_MAX)
+        fields["name"] = name
+
+    if data.get("image"):
+        try:
+            mime, raw = parse_image(data.get("image"), AVATAR_MAX_BYTES)
+        except ValueError as e:
+            return err(str(e))
+        group_avatars_col.replace_one({"_id": chat["_id"]}, {"_id": chat["_id"], "mime": mime, "data": Binary(raw)}, upsert=True)
+        fields["avatar_v"] = int(time.time())
+    elif data.get("image") is None and "remove_avatar" in data and data.get("remove_avatar"):
+        group_avatars_col.delete_one({"_id": chat["_id"]})
+        fields["avatar_v"] = None
+
+    if fields:
+        set_fields = {k: v for k, v in fields.items() if v is not None}
+        unset_fields = {k: "" for k, v in fields.items() if v is None}
+        update = {}
+        if set_fields:
+            update["$set"] = set_fields
+        if unset_fields:
+            update["$unset"] = unset_fields
+        if update:
+            chats_col.update_one({"_id": chat["_id"]}, update)
+        refresh_last_message(chat["_id"])  # обновит отображаемое имя отправителя не требуется, но безопасно
+
+    return jsonify({"chat": chat_dto_by_id(chat["_id"], g.user)})
+
+
+@app.get("/group-avatar/<chat_id>")
+def get_group_avatar(chat_id):
+    oid = as_oid(chat_id)
+    doc = group_avatars_col.find_one({"_id": oid}) if oid else None
+    if not doc:
+        return Response(status=404)
+    resp = Response(bytes(doc["data"]), mimetype=doc["mime"])
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+@app.post("/groups/<chat_id>/members")
+@auth_required
+def manage_group_members(chat_id):
+    chat = get_group_for_user(chat_id)
+    if not chat:
+        return err("chat_not_found", 404)
+    if not is_group_manager(chat, g.user["_id"]):
+        return err("forbidden", 403)
+
+    data = request.get_json(silent=True) or {}
+    action = as_str(data.get("action"))
+    uid = as_oid(data.get("user_id"))
+    if action not in ("add", "remove") or not uid:
+        return err("bad_request")
+
+    if action == "add":
+        if uid in chat["members"]:
+            return jsonify({"chat": chat_dto_by_id(chat["_id"], g.user)})
+        if len(chat["members"]) >= GROUP_MEMBERS_MAX:
+            return err("group_members_max", max=GROUP_MEMBERS_MAX)
+        # добавлять можно только тех, кто есть в контактах у того, кто добавляет
+        if not contacts_col.find_one({"owner_id": g.user["_id"], "contact_id": uid}, {"_id": 1}):
+            return err("not_in_contacts")
+        chats_col.update_one({"_id": chat["_id"]}, {"$addToSet": {"members": uid}})
+    else:
+        if uid == chat["owner_id"]:
+            return err("forbidden", 403)  # создателя удалить нельзя — только удалить/покинуть группу
+        chats_col.update_one({"_id": chat["_id"]}, {"$pull": {"members": uid, "admins": uid}})
+
+    return jsonify({"chat": chat_dto_by_id(chat["_id"], g.user)})
+
+
+@app.post("/groups/<chat_id>/admins")
+@auth_required
+def manage_group_admins(chat_id):
+    chat = get_group_for_user(chat_id)
+    if not chat:
+        return err("chat_not_found", 404)
+    if chat.get("owner_id") != g.user["_id"]:
+        return err("forbidden", 403)  # назначать/снимать админов может только создатель
+
+    data = request.get_json(silent=True) or {}
+    uid = as_oid(data.get("user_id"))
+    make = bool(data.get("make"))
+    if not uid or uid not in chat["members"] or uid == chat["owner_id"]:
+        return err("bad_request")
+
+    op = {"$addToSet": {"admins": uid}} if make else {"$pull": {"admins": uid}}
+    chats_col.update_one({"_id": chat["_id"]}, op)
+    return jsonify({"chat": chat_dto_by_id(chat["_id"], g.user)})
+
+
+@app.post("/groups/<chat_id>/delete")
+@auth_required
+def delete_group(chat_id):
+    chat = get_group_for_user(chat_id)
+    if not chat:
+        return err("chat_not_found", 404)
+    if chat.get("owner_id") != g.user["_id"]:
+        return err("forbidden", 403)  # удалить группу может только создатель
+
+    for m in messages_col.find({"chat_id": chat["_id"]}, {"image_id": 1}):
+        if m.get("image_id"):
+            images_col.delete_one({"_id": m["image_id"]})
+    messages_col.delete_many({"chat_id": chat["_id"]})
+    typing_col.delete_many({"chat_id": chat["_id"]})
+    group_avatars_col.delete_one({"_id": chat["_id"]})
+    chats_col.delete_one({"_id": chat["_id"]})
+    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------- Чаты и сообщения
