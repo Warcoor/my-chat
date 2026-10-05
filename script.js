@@ -111,6 +111,19 @@ const I18N = {
     "receipts.delivered": "доставлено {time}",
     "receipts.pending": "ещё не доставлено",
     "status.image": "Фото",
+    "chats.retryBtn": "Повторить",
+    "chats.cancelSend": "Отмена",
+    "menu.views": "Кто видел",
+    "group.makeAdmin": "Сделать админом",
+    "group.revokeAdmin": "Снять админа",
+    "group.removeMember": "Удалить из группы",
+    "group.removeConfirm": "Удалить {name} из группы?",
+    "group.addMember": "Добавить участника",
+    "group.noneToAdd": "Все ваши контакты уже в группе.",
+    "group.delete": "Удалить группу",
+    "group.deleteConfirm": "Удалить группу безвозвратно вместе со всей перепиской?",
+    "group.owner": "создатель",
+    "group.admin": "админ",
   },
   en: {
     "auth.subtitle": "Sign in or create an account",
@@ -214,6 +227,19 @@ const I18N = {
     "receipts.delivered": "delivered {time}",
     "receipts.pending": "not delivered yet",
     "status.image": "Photo",
+    "chats.retryBtn": "Retry",
+    "chats.cancelSend": "Cancel",
+    "menu.views": "Seen by",
+    "group.makeAdmin": "Make admin",
+    "group.revokeAdmin": "Revoke admin",
+    "group.removeMember": "Remove from group",
+    "group.removeConfirm": "Remove {name} from the group?",
+    "group.addMember": "Add member",
+    "group.noneToAdd": "All your contacts are already in this group.",
+    "group.delete": "Delete group",
+    "group.deleteConfirm": "Permanently delete this group and all its messages?",
+    "group.owner": "owner",
+    "group.admin": "admin",
   },
   uk: {
     "auth.subtitle": "Увійдіть або створіть акаунт",
@@ -317,6 +343,19 @@ const I18N = {
     "receipts.delivered": "доставлено {time}",
     "receipts.pending": "ще не доставлено",
     "status.image": "Фото",
+    "chats.retryBtn": "Повторити",
+    "chats.cancelSend": "Скасувати",
+    "menu.views": "Хто бачив",
+    "group.makeAdmin": "Зробити адміном",
+    "group.revokeAdmin": "Зняти адміна",
+    "group.removeMember": "Видалити з групи",
+    "group.removeConfirm": "Видалити {name} з групи?",
+    "group.addMember": "Додати учасника",
+    "group.noneToAdd": "Усі ваші контакти вже в групі.",
+    "group.delete": "Видалити групу",
+    "group.deleteConfirm": "Видалити групу назавжди разом з усім листуванням?",
+    "group.owner": "власник",
+    "group.admin": "адмін",
   },
 };
 
@@ -460,6 +499,15 @@ function makeAvatar(user, small = false) {
   const a = el("div", "avatar" + (small ? " sm" : ""));
   fillAvatar(a, user, small);
   return a;
+}
+
+function groupAvatarObj(c) { return { name: c.title, avatar: c.avatar, online: false }; }
+
+// Карточка участника чата по его id (нужна для клика по автору сообщения -> просмотр профиля)
+function memberById(id) {
+  const c = activeChat();
+  if (!c) return null;
+  return (c.members || []).find((u) => u.id === id) || null;
 }
 
 // ------------------------------------------------------------ Статус "в сети"
@@ -657,7 +705,7 @@ function renderChatList() {
 
   for (const c of filtered) {
     const row = el("button", "chat-row" + (c.id === activeId ? " active" : ""));
-    row.appendChild(makeAvatar(c.type === "private" ? c.peer || c.title : c.title));
+    row.appendChild(makeAvatar(c.type === "private" ? c.peer || c.title : groupAvatarObj(c)));
 
     const mid = el("div", "mid");
     const top = el("div", "top");
@@ -742,7 +790,7 @@ function updateHeader() {
   const c = activeChat();
   if (!c) return;
   $("head-title").textContent = c.title;
-  fillAvatar($("head-avatar"), c.type === "private" ? c.peer || c.title : c.title);
+  fillAvatar($("head-avatar"), c.type === "private" ? c.peer || c.title : groupAvatarObj(c));
   const status = $("head-status");
   const typing = typingText(c);
   status.classList.remove("typing", "online");
@@ -820,6 +868,14 @@ async function unpin() {
   catch (e) { setPinned(prev); }
 }
 
+function scrollToMessage(id) {
+  const target = msgRows.get(id);
+  if (!target) return;
+  target.row.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.row.classList.add("flash");
+  setTimeout(() => target.row.classList.remove("flash"), 1200);
+}
+
 async function pinMessage(id) {
   if (!activeId) return;
   try {
@@ -885,6 +941,8 @@ function renderBubble(bubble, m, mine, isGroup, firstInRun) {
   if (!mine && isGroup && firstInRun) {
     const author = el("span", "author", m.sender);
     author.style.color = avatarColor(m.sender);
+    author.style.cursor = "pointer";
+    author.addEventListener("click", (e) => { e.stopPropagation(); openSenderProfile(m); });
     bubble.appendChild(author);
   }
 
@@ -939,7 +997,12 @@ function createRow(m, pending) {
 
   if (!mine) {
     const slot = el("div", "avatar-slot");
-    if (firstInRun) slot.appendChild(makeAvatar(m.sender, true));
+    if (firstInRun) {
+      const av = makeAvatar(m.sender, true);
+      av.style.cursor = "pointer";
+      av.addEventListener("click", (e) => { e.stopPropagation(); openSenderProfile(m); });
+      slot.appendChild(av);
+    }
     row.appendChild(slot);
   }
   const bubble = el("div", "bubble");
@@ -947,6 +1010,12 @@ function createRow(m, pending) {
   renderBubble(bubble, m, mine, isGroup, firstInRun);
   if (!pending) bindMessageInteractions(row, bubble);
   return { row, bubble };
+}
+
+// Клик по автору/аватарке сообщения -> профиль (из участников текущего чата, если удалось найти)
+function openSenderProfile(m) {
+  const user = memberById(m.sender_id) || { id: m.sender_id, name: m.sender, login: m.sender };
+  showUserProfile(user);
 }
 
 // Клик, долгий тап и ПКМ по сообщению — вызывают контекстное меню (Reply/React/Pin/Edit/Delete/Copy)
@@ -975,6 +1044,15 @@ function bindMessageInteractions(row, bubble) {
 // Точечное обновление: если строка сообщения уже на экране (правка/реакция/статус) — просто
 // перерисовываем её содержимое; если сообщения ещё нет — добавляем новую строку в конец списка.
 function upsertMessage(m) {
+  if (m.deleted) {
+    const rowObj = msgRows.get(m.id);
+    if (rowObj) { rowObj.row.remove(); msgRows.delete(m.id); }
+    messagesData.delete(m.id);
+    if (pinned && pinned.id === m.id) setPinned(null);
+    if (!$("messages").querySelector(".msg")) showNoMessages();
+    return;
+  }
+
   messagesData.set(m.id, m);
   if (m.updated_at && (!sinceIso || m.updated_at > sinceIso)) sinceIso = m.updated_at;
 
@@ -1042,6 +1120,8 @@ function showMessageMenu(m, x, y) {
   else addItem(t("menu.pin"), () => { pinMessage(m.id); closeMessageMenu(); });
   if (m.text) addItem(t("menu.copy"), () => { copyText(m.text); closeMessageMenu(); });
   if (mine) {
+    const c = activeChat();
+    if (c && c.type === "group") addItem(t("menu.views"), () => { showReceipts(m.id); closeMessageMenu(); });
     addItem(t("menu.edit"), () => { startEdit(m); closeMessageMenu(); });
     addItem(t("menu.delete"), () => { deleteMessage(m.id); closeMessageMenu(); }, true);
   }
@@ -1261,14 +1341,38 @@ function sendMessage() {
   };
   const { row, bubble } = createRow(localMsg, true);
   job.el = row; job.bubble = bubble;
-  row.addEventListener("click", () => { if (row.classList.contains("failed")) postJob(job, attachment, replySnapshot ? replySnapshot.id : null); });
   box.appendChild(row);
   box.scrollTop = box.scrollHeight;
 
   postJob(job, attachment, replySnapshot ? replySnapshot.id : null);
 }
 
+function clearSendError(bubble) {
+  const box = bubble.querySelector(".send-error");
+  if (box) box.remove();
+}
+
+function showSendError(job, message, attachment, replyToId) {
+  clearSendError(job.bubble);
+  const box = el("div", "send-error");
+  box.appendChild(el("div", "send-error-text", message));
+  const actions = el("div", "send-error-actions");
+  const retry = el("button", "", t("chats.retryBtn"));
+  const cancel = el("button", "", t("chats.cancelSend"));
+  retry.addEventListener("click", (e) => { e.stopPropagation(); postJob(job, attachment, replyToId); });
+  cancel.addEventListener("click", (e) => {
+    e.stopPropagation();
+    localJobs.delete(job.clientId);
+    job.el.remove();
+    if (!$("messages").querySelector(".msg")) showNoMessages();
+  });
+  actions.append(retry, cancel);
+  box.appendChild(actions);
+  job.bubble.appendChild(box);
+}
+
 async function postJob(job, attachment, replyToId) {
+  clearSendError(job.bubble);
   job.el.classList.remove("failed");
   job.el.classList.add("pending");
   try {
@@ -1282,6 +1386,7 @@ async function postJob(job, attachment, replyToId) {
     if (job.done) return;
     job.el.classList.remove("pending");
     job.el.classList.add("failed");
+    showSendError(job, e.message || t("err.network"), attachment, replyToId);
   }
 }
 
@@ -1478,27 +1583,217 @@ function showCreateGroup() {
 function showChatInfo() {
   const c = activeChat();
   if (!c) return;
+  if (c.type === "private") { if (c.peer) showUserProfile(c.peer); return; }
+  showGroupInfo(c.id);
+}
+
+// Просмотр профиля любого участника (клик по аватарке/имени в переписке, в шапке приватного чата, в списке участников)
+function showUserProfile(user) {
   openModal((modal) => {
-    const head = el("div", "member-row");
-    head.append(makeAvatar(c.type === "private" ? c.peer || c.title : c.title), el("h3", "", c.title));
-    head.lastChild.style.marginBottom = "0";
+    const head = el("div", "profile-head");
+    const av = el("div", "avatar lg");
+    fillAvatar(av, user);
+    head.appendChild(av);
+    const h = el("h3", "", user.name);
+    h.style.marginBottom = "2px";
+    head.appendChild(h);
+    if (user.login) head.appendChild(el("div", "hint", t("profile.login", { login: user.login })));
+    if ("online" in user) head.appendChild(el("div", "status" + (user.online ? " online" : ""), formatLastSeen(user)));
     modal.appendChild(head);
-    if (c.type === "group") {
-      modal.appendChild(el("p", "hint", t("chats.membersCount", { n: c.members.length })));
-      for (const m of c.members) {
-        const row = el("div", "member-row");
-        const suffix = m.id === c.owner_id ? " · " + t("nav.profile") : m.id === me.id ? " (" + t("chats.you") + ")" : "";
-        row.append(makeAvatar(m, true), el("span", "", m.name + suffix));
-        modal.appendChild(row);
-      }
-    } else if (c.peer) {
-      modal.appendChild(el("p", "hint", formatLastSeen(c.peer)));
-      if (c.peer.bio) modal.appendChild(el("p", "hint", c.peer.bio));
-    }
+    if (user.bio) modal.appendChild(el("p", "hint", user.bio));
     const close = el("button", "btn btn-ghost btn-wide", t("info.close"));
-    close.style.marginTop = "12px";
+    close.style.marginTop = "6px";
     close.addEventListener("click", closeModal);
     modal.appendChild(close);
+  });
+}
+
+function applyChatUpdate(updatedChat) {
+  if (!updatedChat) return;
+  const idx = chats.findIndex((x) => x.id === updatedChat.id);
+  if (idx >= 0) chats[idx] = updatedChat; else chats = [updatedChat, ...chats];
+  lastListSig = "";
+  renderChatList();
+  if (activeId === updatedChat.id) updateHeader();
+}
+
+// Карточка группы: просмотр для всех, управление (имя/аватар/участники/админы/удаление) — для создателя и админов
+function showGroupInfo(chatId) {
+  const c = chats.find((x) => x.id === chatId);
+  if (!c) return;
+  const isOwner = c.owner_id === me.id;
+  const isManager = isOwner || (c.admins || []).includes(me.id);
+
+  openModal((modal) => {
+    const head = el("div", "profile-head");
+    const avWrap = el("div", isManager ? "avatar-edit" : "");
+    const av = el("div", "avatar lg");
+    fillAvatar(av, groupAvatarObj(c));
+    avWrap.appendChild(av);
+
+    let fileInput;
+    if (isManager) {
+      const badge = el("button", "edit-badge");
+      badge.type = "button";
+      badge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z"/></svg>';
+      fileInput = el("input"); fileInput.type = "file"; fileInput.accept = "image/png,image/jpeg,image/webp"; fileInput.className = "hidden";
+      badge.addEventListener("click", () => fileInput.click());
+      avWrap.append(badge, fileInput);
+    }
+    head.appendChild(avWrap);
+
+    const error = el("div", "error");
+    let nameInput = null;
+    if (isManager) {
+      nameInput = el("input", "field");
+      nameInput.value = c.title;
+      nameInput.maxLength = 40;
+      nameInput.style.textAlign = "center";
+      head.appendChild(nameInput);
+    } else {
+      const h = el("h3", "", c.title);
+      h.style.marginBottom = "2px";
+      head.appendChild(h);
+    }
+    head.appendChild(el("div", "hint", t("chats.membersCount", { n: c.members.length })));
+    modal.appendChild(head);
+    modal.appendChild(error);
+
+    if (isManager) {
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        try {
+          const { dataUrl } = await resizeImage(file, 512, 0.85);
+          const data = await api(`/groups/${c.id}/update`, { method: "POST", body: { image: dataUrl } });
+          applyChatUpdate(data.chat);
+          fillAvatar(av, groupAvatarObj(data.chat));
+        } catch (e) { error.textContent = e.message; }
+        fileInput.value = "";
+      });
+
+      const save = el("button", "btn btn-wide", t("profile.save"));
+      save.style.marginBottom = "16px";
+      save.addEventListener("click", async () => {
+        const name = nameInput.value.trim();
+        if (!name) { error.textContent = t("err.enterGroupName"); return; }
+        if (name === c.title) return;
+        save.disabled = true;
+        try { applyChatUpdate((await api(`/groups/${c.id}/update`, { method: "POST", body: { name } })).chat); }
+        catch (e) { error.textContent = e.message; }
+        finally { save.disabled = false; }
+      });
+      modal.appendChild(save);
+    }
+
+    const list = el("div", "pick-list");
+    for (const m of c.members) {
+      const row = el("div", "member-row");
+      const av2 = makeAvatar(m, true);
+      av2.style.cursor = "pointer";
+      av2.addEventListener("click", () => showUserProfile(m));
+      row.appendChild(av2);
+
+      const mid = el("div", "mid");
+      const role = m.id === c.owner_id ? " · 👑 " + t("group.owner") : (c.admins || []).includes(m.id) ? " · " + t("group.admin") : "";
+      const nameSpan = el("span", "", m.name + (m.id === me.id ? " (" + t("chats.you") + ")" : "") + role);
+      nameSpan.style.cursor = "pointer";
+      nameSpan.addEventListener("click", () => showUserProfile(m));
+      mid.appendChild(nameSpan);
+      row.appendChild(mid);
+
+      if (isOwner && m.id !== c.owner_id) {
+        const isAdmin = (c.admins || []).includes(m.id);
+        const toggleAdmin = el("button", "link-btn", isAdmin ? t("group.revokeAdmin") : t("group.makeAdmin"));
+        toggleAdmin.addEventListener("click", async () => {
+          try {
+            applyChatUpdate((await api(`/groups/${c.id}/admins`, { method: "POST", body: { user_id: m.id, make: !isAdmin } })).chat);
+            closeModal(); showGroupInfo(c.id);
+          } catch (e) { error.textContent = e.message; }
+        });
+        row.appendChild(toggleAdmin);
+      }
+      if (isManager && m.id !== c.owner_id) {
+        const remove = el("button", "link-btn", "✕");
+        remove.title = t("group.removeMember");
+        remove.addEventListener("click", async () => {
+          if (!confirm(t("group.removeConfirm", { name: m.name }))) return;
+          try {
+            applyChatUpdate((await api(`/groups/${c.id}/members`, { method: "POST", body: { action: "remove", user_id: m.id } })).chat);
+            closeModal(); showGroupInfo(c.id);
+          } catch (e) { error.textContent = e.message; }
+        });
+        row.appendChild(remove);
+      }
+      list.appendChild(row);
+    }
+    modal.appendChild(list);
+
+    if (isManager) {
+      const addBtn = el("button", "btn btn-ghost btn-wide", t("group.addMember"));
+      addBtn.style.marginTop = "10px";
+      addBtn.addEventListener("click", () => { closeModal(); showAddGroupMember(c.id); });
+      modal.appendChild(addBtn);
+    }
+
+    if (isOwner) {
+      const delBtn = el("button", "btn btn-danger btn-wide", t("group.delete"));
+      delBtn.style.marginTop = "10px";
+      delBtn.addEventListener("click", async () => {
+        if (!confirm(t("group.deleteConfirm"))) return;
+        try {
+          await api(`/groups/${c.id}/delete`, { method: "POST" });
+          chats = chats.filter((x) => x.id !== c.id);
+          lastListSig = "";
+          closeModal();
+          if (activeId === c.id) closeChat();
+          renderChatList();
+        } catch (e) { error.textContent = e.message; }
+      });
+      modal.appendChild(delBtn);
+    } else {
+      const close = el("button", "btn btn-ghost btn-wide", t("info.close"));
+      close.style.marginTop = "10px";
+      close.addEventListener("click", closeModal);
+      modal.appendChild(close);
+    }
+  });
+}
+
+async function showAddGroupMember(chatId) {
+  openModal(async (modal) => {
+    modal.appendChild(el("h3", "", t("group.addMember")));
+    const error = el("div", "error");
+    const box = el("div", "pick-list");
+    box.appendChild(el("div", "empty-list", "…"));
+    modal.append(box, error);
+
+    let cts = [];
+    try { cts = (await api("/contacts")).contacts; } catch (e) { error.textContent = e.message; }
+    const c = chats.find((x) => x.id === chatId);
+    const existing = new Set((c ? c.members : []).map((m) => m.id));
+    const avail = cts.filter((u) => !existing.has(u.id));
+
+    box.replaceChildren();
+    if (!avail.length) box.appendChild(el("div", "empty-list", t("group.noneToAdd")));
+    for (const u of avail) {
+      const row = el("button", "contact-row");
+      row.appendChild(makeAvatar(u, true));
+      const mid = el("div", "mid");
+      mid.appendChild(el("div", "name", u.name));
+      row.appendChild(mid);
+      row.addEventListener("click", async () => {
+        try {
+          applyChatUpdate((await api(`/groups/${chatId}/members`, { method: "POST", body: { action: "add", user_id: u.id } })).chat);
+          closeModal(); showGroupInfo(chatId);
+        } catch (e) { error.textContent = e.message; }
+      });
+      box.appendChild(row);
+    }
+    const back = el("button", "btn btn-ghost btn-wide", t("add.back"));
+    back.style.marginTop = "10px";
+    back.addEventListener("click", () => { closeModal(); showGroupInfo(chatId); });
+    modal.appendChild(back);
   });
 }
 
@@ -1673,7 +1968,8 @@ $("message-text").addEventListener("focus", () => setTimeout(() => { const b = $
 $("chat-search").addEventListener("input", onSearchInput);
 $("btn-cancel-reply").addEventListener("click", cancelReply);
 $("btn-cancel-attach").addEventListener("click", cancelAttachment);
-$("btn-unpin").addEventListener("click", unpin);
+$("btn-unpin").addEventListener("click", (e) => { e.stopPropagation(); unpin(); });
+$("pinned-bar").addEventListener("click", () => { if (pinned) scrollToMessage(pinned.id); });
 $("btn-emoji").addEventListener("click", toggleEmojiPanel);
 $("btn-attach").addEventListener("click", () => $("file-input").click());
 $("file-input").addEventListener("change", onFileSelected);
