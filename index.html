@@ -133,7 +133,15 @@ textarea.field{resize:vertical;min-height:70px}
 .bubble .time{float:right;margin:6px 0 0 12px;font-size:11px;opacity:.65;line-height:1}
 .no-msgs{margin:auto;color:var(--muted)}
 .msg.pending .bubble{opacity:.65}
-.msg.failed .bubble{background:var(--danger);color:#fff;cursor:pointer}
+.msg.failed .bubble{cursor:default}
+.send-error{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.3)}
+.msg.out .send-error{border-top-color:rgba(255,255,255,.3)}
+.msg:not(.out) .send-error{border-top-color:var(--line)}
+.send-error-text{font-size:12px;color:var(--danger)}
+.msg.out .send-error-text{color:#ffd9d6}
+.send-error-actions{display:flex;gap:8px;margin-top:5px}
+.send-error-actions button{font-size:12px;padding:4px 10px;border-radius:7px;background:rgba(127,127,127,.18)}
+.msg.out .send-error-actions button{background:rgba(255,255,255,.22);color:#fff}
 
 .composer{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));background:var(--panel);border-top:1px solid var(--line)}
 .composer .field{margin:0;flex:1;border-radius:22px;padding:11px 16px}
@@ -153,7 +161,9 @@ textarea.field{resize:vertical;min-height:70px}
 .pick{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer}
 .pick:hover{background:var(--panel-2)}
 .pick input{width:18px;height:18px;accent-color:var(--accent)}
-.member-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.member-row{display:flex;align-items:center;gap:8px;padding:6px 0}
+.member-row .mid{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.member-row .link-btn{flex:none;white-space:nowrap}
 
 /* Профиль */
 .profile-head{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:18px}
@@ -254,9 +264,10 @@ textarea.field{resize:vertical;min-height:70px}
 .msg.out .reaction-chip.mine{border-color:rgba(255,255,255,.85);background:rgba(255,255,255,.25);color:#fff}
 
 /* ---------- Статус сообщения (галочки) ---------- */
-.ticks{display:inline-flex;vertical-align:middle;margin-left:3px}
-.ticks svg{width:15px;height:10px;stroke:currentColor;fill:none;stroke-width:2}
+.ticks{display:inline-flex;vertical-align:middle;margin-left:3px;letter-spacing:-3.5px;font-size:12px}
 .ticks.read{color:#5ad0ff}
+@keyframes msg-flash{0%,100%{background:transparent}30%{background:var(--accent-soft)}}
+.msg.flash .bubble{animation:msg-flash 1.2s ease}
 .msg.out .bubble .time{cursor:default}
 .msg.out .bubble .time.clickable{cursor:pointer}
 
@@ -272,9 +283,9 @@ textarea.field{resize:vertical;min-height:70px}
 
 /* ---------- Контекстное меню сообщения ---------- */
 .msg-menu-backdrop{position:fixed;inset:0;z-index:20}
-.msg-menu{position:fixed;z-index:21;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:190px;max-width:240px}
-.msg-menu .reaction-row{display:flex;gap:2px;padding:4px 2px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
-.msg-menu .reaction-row button{font-size:19px;padding:4px;border-radius:8px;flex:1;text-align:center}
+.msg-menu{position:fixed;z-index:21;background:var(--panel);border-radius:12px;box-shadow:var(--shadow);padding:6px;width:252px;max-width:calc(100vw - 16px);overflow:hidden}
+.msg-menu .reaction-row{display:flex;gap:0;padding:4px 0 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.msg-menu .reaction-row button{font-size:18px;padding:4px 0;border-radius:8px;flex:1 1 0;min-width:0;text-align:center}
 .msg-menu .reaction-row button:hover{background:var(--panel-2)}
 .msg-menu .menu-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 10px;border-radius:8px;font-size:14px}
 .msg-menu .menu-item:hover{background:var(--panel-2)}
